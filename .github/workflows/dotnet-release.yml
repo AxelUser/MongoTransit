@@ -1,0 +1,43 @@
+name: .NET
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 5.0.x
+    - name: Restore dependencies
+      run: dotnet restore --runtime linux-x64
+    - name: Build
+      run: dotnet build --configuration Release --no-restore
+    - name: Unit tests
+      run: dotnet test --no-restore --verbosity normal
+    - name: Publish Linux x64
+      run: dotnet publish MongoTransit/MongoTransit.csproj --configuration Release --runtime linux-x64 -p:PublishSingleFile=true -p:PublishTrimmed=true --no-restore
+    - name: Upload MongoTransit executable into build artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: mongotransit-linux-x64
+        path: MongoTransit/bin/Release/net5.0/linux-x64/publish/MongoTransit
+    - name: Bump version and push tag
+      id: bump
+      uses: anothrNick/github-tag-action@1.26.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        WITH_V: true
+    - name: Create release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.bump.outputs.new_tag }}
+        files: MongoTransit/bin/Release/net5.0/linux-x64/publish/MongoTransit
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
