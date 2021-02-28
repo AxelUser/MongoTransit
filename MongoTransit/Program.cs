@@ -1,6 +1,7 @@
 ﻿using System.Linq;
 using System.Threading.Tasks;
 using CommandLine;
+using MongoTransit.Transit;
 
 namespace MongoTransit
 {

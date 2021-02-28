@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using MongoTransit.Transit;
 using YamlDotNet.Serialization;
 
 namespace MongoTransit

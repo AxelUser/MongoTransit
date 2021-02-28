@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace MongoTransit
+namespace MongoTransit.Transit
 {
     public static class TransitRunner
     {

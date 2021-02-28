@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
-namespace MongoTransit
+namespace MongoTransit.Transit
 {
     public class CollectionTransitHandler
     {
