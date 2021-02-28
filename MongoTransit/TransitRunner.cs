@@ -1,23 +1,13 @@
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace MongoTransit
 {
-    public class TransitRunner
+    public static class TransitRunner
     {
-        private readonly string _configPath;
-
-        public TransitRunner(string configPath)
+        public static async Task RunAsync(CollectionTransitOptions[] options, CancellationToken token)
         {
-            _configPath = configPath;
-        }
-
-        public async Task RunAsync(CancellationToken token)
-        {
-            var options = ConfigurationReader.Read(_configPath).ToArray();
-
             var handlers = new List<CollectionTransitHandler>(options.Length);
             var operations = new List<Task>(options.Length);
             

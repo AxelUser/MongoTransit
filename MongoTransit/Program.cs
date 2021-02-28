@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System.Linq;
+using System.Threading.Tasks;
 using CommandLine;
 
 namespace MongoTransit
@@ -8,10 +9,10 @@ namespace MongoTransit
         private static async Task Main(string[] args)
         {
             await Parser.Default.ParseArguments<ToolOptions>(args)
-                .WithParsedAsync(async options =>
+                .WithParsedAsync(async toolOpts =>
                 {
-                    var runner = new TransitRunner(options.ConfigFile);
-                    await runner.RunAsync(default);
+                    var config = ConfigurationReader.Read(toolOpts.ConfigFile).ToArray();
+                    await TransitRunner.RunAsync(config, default);
                 });
         }
     }
