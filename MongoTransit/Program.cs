@@ -2,6 +2,8 @@
 using System.Threading.Tasks;
 using CommandLine;
 using MongoTransit.Transit;
+using Serilog;
+using Serilog.Events;
 
 namespace MongoTransit
 {
@@ -13,7 +15,11 @@ namespace MongoTransit
                 .WithParsedAsync(async toolOpts =>
                 {
                     var config = ConfigurationReader.Read(toolOpts.ConfigFile).ToArray();
-                    await TransitRunner.RunAsync(config, default);
+
+                    var log = new LoggerConfiguration()
+                        .WriteTo.Console(LogEventLevel.Information)
+                        .CreateLogger();
+                    await TransitRunner.RunAsync(log, config, default);
                 });
         }
     }

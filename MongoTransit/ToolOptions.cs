@@ -6,5 +6,8 @@ namespace MongoTransit
     {
         [Option('c', "config", Required = true, HelpText = "YAML file with configuration")]
         public string ConfigFile { get; set; }
+
+        [Option('l', "logs", Required = false, HelpText = "Directory for log files")]
+        public string LogsDirectory { get; set; }
     }
 }

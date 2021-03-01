@@ -1,23 +1,27 @@
 using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using Serilog;
 
 namespace MongoTransit.Transit
 {
     public class CollectionTransitHandler
     {
+        private readonly ILogger _logger;
         private readonly CollectionTransitOptions _options;
         private readonly IMongoCollection<BsonDocument> _fromCollection;
         private readonly IMongoCollection<BsonDocument> _toCollection;
 
-        public CollectionTransitHandler(CollectionTransitOptions options)
+        public CollectionTransitHandler(ILogger logger, CollectionTransitOptions options)
         {
+            _logger = logger;
             _options = options;
             
             // TODO check DB for existence
@@ -33,6 +37,11 @@ namespace MongoTransit.Transit
         
         public async Task TransitAsync(CancellationToken token)
         {
+            var sw = new Stopwatch();
+            sw.Start();
+            
+            _logger.Debug("Starting transit operation");
+            
             var transitChannel = Channel.CreateBounded<(int count, WriteModel<BsonDocument>[] batch)>(_options.Workers);
             
             IAsyncCursor<BsonDocument> fromCursor = await CreateReadingCursorAsync(token);
