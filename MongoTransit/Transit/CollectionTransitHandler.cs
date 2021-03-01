@@ -43,21 +43,80 @@ namespace MongoTransit.Transit
             _logger.Debug("Starting transit operation");
             
             var transitChannel = Channel.CreateBounded<(int count, WriteModel<BsonDocument>[] batch)>(_options.Workers);
-            
-            IAsyncCursor<BsonDocument> fromCursor = await CreateReadingCursorAsync(token);
-            
+
+            BsonDocument filter;
+            if (_options.IterativeTransferOptions != null)
+            {
+                _logger.Debug("Detected iterative transit option. Fetching checkpoint and lag");
+                
+                var checkpointField = _options.IterativeTransferOptions.Field;
+
+                DateTime? lastCheckpoint;
+                
+                if (_options.IterativeTransferOptions?.ForcedCheckpoint != null)
+                {
+                    _logger.Information("Forced to use checkpoint {ForcedCheckpoint} for collection {Collection}",
+                        _options.IterativeTransferOptions?.ForcedCheckpoint, _options.Collection);
+                    lastCheckpoint = _options.IterativeTransferOptions?.ForcedCheckpoint;
+                }
+                else
+                {
+                    _logger.Debug("Fetching last checkpoint for collection {Collection}", _options.Collection);
+                    lastCheckpoint = await FindCheckpointAsync(_toCollection, checkpointField, token);
+                }
+                
+                if (lastCheckpoint == null)
+                {
+                    throw new Exception($"Couldn't get checkpoint for collection {_options.Collection}");
+                }
+
+                _logger.Debug("Collection {Collection} has checkpoint {lastCheckpoint}", _options.Collection,
+                    lastCheckpoint);
+                
+                _logger.Debug("Counting how many documents should be transferred");
+                var lag = await CountLagAsync(checkpointField, lastCheckpoint.Value, token);
+                _logger.Debug("Collection {Collection} has lag {lag}", _options.Collection, lag);
+                
+                if (lag == 0)
+                {
+                    _logger.Information("Collection {Collection} is up-to date, skipping transit", _options.Collection);
+                    return;
+                }
+
+                _logger.Debug("Collection {Collection} has checkpoint {lastCheckpoint} and lag {lag:N0}",
+                    _options.Collection, lastCheckpoint, lag);
+                
+                filter = new BsonDocument(checkpointField, new BsonDocument("$gte", lastCheckpoint));
+            }
+            else
+            {
+                filter = new BsonDocument();
+            }
+
+            _logger.Debug("Creating cursor to source");
+            IAsyncCursor<BsonDocument> fromCursor = await _fromCollection.FindAsync(
+                filter, new FindOptions<BsonDocument>
+                {
+                    BatchSize = _options.BatchSize
+                }, token);
+
+            _logger.Debug("Starting {N} insertion workers", _options.Workers);
             var insertionWorkers = new List<Task>(_options.Workers);
             for (var workerN = 0; workerN < _options.Workers; workerN++)
             {
-                insertionWorkers[workerN] = RunWorker(transitChannel.Reader, token);
+                insertionWorkers[workerN] = RunWorker(transitChannel.Reader, _logger.ForContext("Worker", workerN), token);
             }
+            _logger.Debug("Started {N} insertion workers", _options.Workers);
             
+            _logger.Debug("Started reading documents from source");
             await ReadDocumentsAsync(_options.BatchSize, _options.UpsertFields, fromCursor, transitChannel.Writer, token);
 
+            _logger.Debug("Finished reading documents, waiting for insertion completion");
             await Task.WhenAll(insertionWorkers);
+            _logger.Debug("All workers finished inserting");
         }
 
-        private static async Task ReadDocumentsAsync(int batchSize, string[] upsertFields, IAsyncCursor<BsonDocument> documentsReader,
+        private async Task ReadDocumentsAsync(int batchSize, string[] upsertFields, IAsyncCursor<BsonDocument> documentsReader,
             ChannelWriter<(int count, WriteModel<BsonDocument>[] batch)> batchWriter, CancellationToken token)
         {
             WriteModel<BsonDocument>[] batch = ArrayPool<WriteModel<BsonDocument>>.Shared.Rent(batchSize);
@@ -80,6 +139,7 @@ namespace MongoTransit.Transit
                 }
                 else
                 {
+                    _logger.Debug("Prepared batch of size {count}", count);
                     await batchWriter.WriteAsync((count, batch), token);
                     count = 0;
                     batch = ArrayPool<WriteModel<BsonDocument>>.Shared.Rent(batchSize);
@@ -89,39 +149,32 @@ namespace MongoTransit.Transit
             // Handle case when cursor is finished, but there are some documents less than batch.
             if (count > 0)
             {
+                _logger.Debug("Flushing the remaining batch of size {count}", count);
                 // Flush remaining documents
                 await batchWriter.WriteAsync((count, batch), token);
             }
             batchWriter.Complete();
         }
 
-        private async Task RunWorker(ChannelReader<(int count, WriteModel<BsonDocument>[] batch)> batchReader, CancellationToken token)
+        private async Task RunWorker(ChannelReader<(int count, WriteModel<BsonDocument>[] batch)> batchReader, ILogger workerLogger, CancellationToken token)
         {
+            var sw = new Stopwatch();
             await foreach (var (count, batch) in batchReader.ReadAllAsync(token))
             {
-                await _toCollection.BulkWriteAsync(batch.Take(count), new BulkWriteOptions
+                workerLogger.Debug("Received batch of size {count}");
+                
+                sw.Restart();
+                var results = await _toCollection.BulkWriteAsync(batch.Take(count), new BulkWriteOptions
                 {
                     IsOrdered = false,
                     BypassDocumentValidation = true
                 }, token);
-                
+                sw.Stop();
+
+                _logger.Debug("Processed batch of size {count} in {elapsed:N1} ms. Succeeded {s}. Failed {f}", count,
+                    sw.ElapsedMilliseconds, results.InsertedCount + results.ModifiedCount);
                 ArrayPool<WriteModel<BsonDocument>>.Shared.Return(batch);
             }
-        }
-
-        private async Task<IAsyncCursor<BsonDocument>> CreateReadingCursorAsync(CancellationToken token)
-        {
-            if (_options.IterativeTransferOptions == null)
-                // Full collection transition
-                return await _fromCollection.FindAsync(null, cancellationToken: token);
-            
-            var checkpointField = _options.IterativeTransferOptions.Field;
-            var lastCheckpoint = _options.IterativeTransferOptions?.ForcedCheckpoint ??
-                                 await FindCheckpointAsync(_toCollection, checkpointField, token);
-
-            // TODO handle if last checkpoint is null
-            var filter = new BsonDocument(checkpointField, new BsonDocument("$gte", lastCheckpoint));
-            return await _fromCollection.FindAsync(filter, cancellationToken: token);
         }
 
         private static async Task<DateTime?> FindCheckpointAsync(IMongoCollection<BsonDocument> collection, string checkpointField, CancellationToken token)
@@ -146,6 +199,16 @@ namespace MongoTransit.Transit
             }
 
             return checkpointBson[checkpointField].ToUniversalTime();
+        }
+
+        private async Task<long> CountLagAsync(string field, DateTime checkpoint, CancellationToken token)
+        {
+            var filter = new BsonDocument
+            {
+                [field] = new BsonDocument("$gt", checkpoint)
+            };
+
+            return await _fromCollection.CountDocumentsAsync(filter, cancellationToken: token);
         }
     }
 }
