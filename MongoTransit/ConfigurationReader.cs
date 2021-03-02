@@ -28,8 +28,7 @@ namespace MongoTransit
             foreach (var coll in opts.Collections)
             {
                 var iterOpts = coll.IterativeCollection != null
-                    ? new IterativeTransitOptions(coll.IterativeCollection.Field,
-                        coll.IterativeCollection.StopOnError, coll.IterativeCollection.ForcedCheckpoint)
+                    ? new IterativeTransitOptions(coll.IterativeCollection.Field, coll.IterativeCollection.ForcedCheckpoint)
                     : null;
 
                 yield return new CollectionTransitOptions(opts.ReplicaSet,

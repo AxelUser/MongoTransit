@@ -95,7 +95,7 @@ namespace MongoTransit.Transit
         {
             if (_options.IterativeTransferOptions != null)
             {
-                return await CheckIterativeCollectionAsync(token);
+                return await CheckIterativeCollectionAsync(_options.IterativeTransferOptions, token);
             }
 
             var filter = new BsonDocument();
@@ -103,19 +103,19 @@ namespace MongoTransit.Transit
             return (filter, count);
         }
 
-        private async Task<(BsonDocument filter, long count)> CheckIterativeCollectionAsync(CancellationToken token)
+        private async Task<(BsonDocument filter, long count)> CheckIterativeCollectionAsync(IterativeTransitOptions iterOpts, CancellationToken token)
         {
             _logger.Debug("Detected iterative transit option. Fetching checkpoint and lag");
-                
-            var checkpointField = _options.IterativeTransferOptions.Field;
+
+            var (checkpointField, forcedCheckpoint) = iterOpts;
 
             DateTime? lastCheckpoint;
             
-            if (_options.IterativeTransferOptions?.ForcedCheckpoint != null)
+            if (forcedCheckpoint != null)
             {
                 _logger.Information("Forced to use checkpoint {ForcedCheckpoint} for collection {Collection}",
-                    _options.IterativeTransferOptions?.ForcedCheckpoint, _options.Collection);
-                lastCheckpoint = _options.IterativeTransferOptions?.ForcedCheckpoint;
+                    iterOpts.ForcedCheckpoint, _options.Collection);
+                lastCheckpoint = iterOpts.ForcedCheckpoint;
             }
             else
             {
