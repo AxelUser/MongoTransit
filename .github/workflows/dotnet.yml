@@ -1,0 +1,26 @@
+name: .NET
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 5.0.x
+    - name: Restore dependencies
+      run: dotnet restore
+    - name: Publish Linux x64
+      run: dotnet publish --configuration Release --runtime linux-x64 -p:PublishSingleFile=true 
+    - name: Upload WebApp1 Build Artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: MongoTransit
+        path: MongoTransit/bin/Release/net5.0/linux-x64/publish/
