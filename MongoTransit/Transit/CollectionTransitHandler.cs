@@ -189,7 +189,7 @@ namespace MongoTransit.Transit
             {
                 try
                 {
-                    workerLogger.Debug("Received batch of size {count}");
+                    workerLogger.Debug("Received batch of size {count}", count);
 #if !DEBUG
                     sw.Restart();
                     var results = await _toCollection.BulkWriteAsync(batch.Take(count), new BulkWriteOptions
