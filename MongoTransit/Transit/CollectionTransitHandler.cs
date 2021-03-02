@@ -8,19 +8,22 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using MongoTransit.Progress;
 using Serilog;
 
 namespace MongoTransit.Transit
 {
     public class CollectionTransitHandler
     {
+        private readonly ProgressManager _manager;
         private readonly ILogger _logger;
         private readonly CollectionTransitOptions _options;
         private readonly IMongoCollection<BsonDocument> _fromCollection;
         private readonly IMongoCollection<BsonDocument> _toCollection;
 
-        public CollectionTransitHandler(ILogger logger, CollectionTransitOptions options)
+        public CollectionTransitHandler(ProgressManager manager, ILogger logger, CollectionTransitOptions options)
         {
+            _manager = manager;
             _logger = logger;
             _options = options;
             
@@ -37,60 +40,20 @@ namespace MongoTransit.Transit
         
         public async Task TransitAsync(CancellationToken token)
         {
-            var sw = new Stopwatch();
-            sw.Start();
-            
             _logger.Debug("Starting transit operation");
             
             var transitChannel = Channel.CreateBounded<(int count, WriteModel<BsonDocument>[] batch)>(_options.Workers);
 
-            BsonDocument filter;
-            if (_options.IterativeTransferOptions != null)
+            var sw = new Stopwatch();
+            sw.Start();
+            var (filter, count) = await CheckCollectionAsync(token);
+            sw.Stop();
+            _logger.Debug("Collection check was completed in {elapsed} ms", sw.ElapsedMilliseconds);
+            
+            if (count == 0)
             {
-                _logger.Debug("Detected iterative transit option. Fetching checkpoint and lag");
-                
-                var checkpointField = _options.IterativeTransferOptions.Field;
-
-                DateTime? lastCheckpoint;
-                
-                if (_options.IterativeTransferOptions?.ForcedCheckpoint != null)
-                {
-                    _logger.Information("Forced to use checkpoint {ForcedCheckpoint} for collection {Collection}",
-                        _options.IterativeTransferOptions?.ForcedCheckpoint, _options.Collection);
-                    lastCheckpoint = _options.IterativeTransferOptions?.ForcedCheckpoint;
-                }
-                else
-                {
-                    _logger.Debug("Fetching last checkpoint for collection {Collection}", _options.Collection);
-                    lastCheckpoint = await FindCheckpointAsync(_toCollection, checkpointField, token);
-                }
-                
-                if (lastCheckpoint == null)
-                {
-                    throw new Exception($"Couldn't get checkpoint for collection {_options.Collection}");
-                }
-
-                _logger.Debug("Collection {Collection} has checkpoint {lastCheckpoint}", _options.Collection,
-                    lastCheckpoint);
-                
-                _logger.Debug("Counting how many documents should be transferred");
-                var lag = await CountLagAsync(checkpointField, lastCheckpoint.Value, token);
-                _logger.Debug("Collection {Collection} has lag {lag}", _options.Collection, lag);
-                
-                if (lag == 0)
-                {
-                    _logger.Information("Collection {Collection} is up-to date, skipping transit", _options.Collection);
-                    return;
-                }
-
-                _logger.Debug("Collection {Collection} has checkpoint {lastCheckpoint} and lag {lag:N0}",
-                    _options.Collection, lastCheckpoint, lag);
-                
-                filter = new BsonDocument(checkpointField, new BsonDocument("$gte", lastCheckpoint));
-            }
-            else
-            {
-                filter = new BsonDocument();
+                _logger.Information("Collection {Collection} is up-to date, skipping transit", _options.Collection);
+                return;
             }
 
             _logger.Debug("Creating cursor to source");
@@ -100,20 +63,80 @@ namespace MongoTransit.Transit
                     BatchSize = _options.BatchSize
                 }, token);
 
-            _logger.Debug("Starting {N} insertion workers", _options.Workers);
-            var insertionWorkers = new List<Task>(_options.Workers);
-            for (var workerN = 0; workerN < _options.Workers; workerN++)
+            var notifier = new ProgressNotifier(count);
+            _manager.Attach(_options.Collection, notifier);
+            sw.Restart();
+            try
             {
-                insertionWorkers[workerN] = RunWorker(transitChannel.Reader, _logger.ForContext("Worker", workerN), token);
-            }
-            _logger.Debug("Started {N} insertion workers", _options.Workers);
+                _logger.Debug("Starting {N} insertion workers", _options.Workers);
+                var insertionWorkers = new List<Task>(_options.Workers);
+                for (var workerN = 0; workerN < _options.Workers; workerN++)
+                {
+                    insertionWorkers[workerN] = RunWorker(notifier, transitChannel.Reader, _logger.ForContext("Worker", workerN), token);
+                }
+                _logger.Debug("Started {N} insertion workers", _options.Workers);
             
-            _logger.Debug("Started reading documents from source");
-            await ReadDocumentsAsync(_options.BatchSize, _options.UpsertFields, fromCursor, transitChannel.Writer, token);
+                _logger.Debug("Started reading documents from source");
+                await ReadDocumentsAsync(_options.BatchSize, _options.UpsertFields, fromCursor, transitChannel.Writer, token);
 
-            _logger.Debug("Finished reading documents, waiting for insertion completion");
-            await Task.WhenAll(insertionWorkers);
-            _logger.Debug("All workers finished inserting");
+                _logger.Debug("Finished reading documents, waiting for insertion completion");
+                await Task.WhenAll(insertionWorkers);
+                _logger.Debug("All workers finished inserting");
+            }
+            finally
+            {
+                sw.Stop();
+                _logger.Debug("Transit finished in {elapsed}", sw.Elapsed);
+                _manager.Detach(_options.Collection);
+            }
+        }
+
+        private async Task<(BsonDocument filter, long count)> CheckCollectionAsync(CancellationToken token)
+        {
+            if (_options.IterativeTransferOptions != null)
+            {
+                return await CheckIterativeCollectionAsync(token);
+            }
+
+            var filter = new BsonDocument();
+            var count = await _fromCollection.CountDocumentsAsync(filter, cancellationToken: token);
+            return (filter, count);
+        }
+
+        private async Task<(BsonDocument filter, long count)> CheckIterativeCollectionAsync(CancellationToken token)
+        {
+            _logger.Debug("Detected iterative transit option. Fetching checkpoint and lag");
+                
+            var checkpointField = _options.IterativeTransferOptions.Field;
+
+            DateTime? lastCheckpoint;
+            
+            if (_options.IterativeTransferOptions?.ForcedCheckpoint != null)
+            {
+                _logger.Information("Forced to use checkpoint {ForcedCheckpoint} for collection {Collection}",
+                    _options.IterativeTransferOptions?.ForcedCheckpoint, _options.Collection);
+                lastCheckpoint = _options.IterativeTransferOptions?.ForcedCheckpoint;
+            }
+            else
+            {
+                _logger.Debug("Fetching last checkpoint for collection {Collection}", _options.Collection);
+                lastCheckpoint = await FindCheckpointAsync(_toCollection, checkpointField, token);
+            }
+            
+            if (lastCheckpoint == null)
+            {
+                throw new Exception($"Couldn't get checkpoint for collection {_options.Collection}");
+            }
+
+            _logger.Debug("Counting how many documents should be transferred");
+            var count = await CountLagAsync(checkpointField, lastCheckpoint.Value, token);
+
+            _logger.Debug("Collection {Collection} has checkpoint {lastCheckpoint} and lag {lag:N0}",
+                _options.Collection, lastCheckpoint, count);
+            
+            var filter = new BsonDocument(checkpointField, new BsonDocument("$gte", lastCheckpoint));
+
+            return (filter, count);
         }
 
         private async Task ReadDocumentsAsync(int batchSize, string[] upsertFields, IAsyncCursor<BsonDocument> documentsReader,
@@ -156,7 +179,7 @@ namespace MongoTransit.Transit
             batchWriter.Complete();
         }
 
-        private async Task RunWorker(ChannelReader<(int count, WriteModel<BsonDocument>[] batch)> batchReader, ILogger workerLogger, CancellationToken token)
+        private async Task RunWorker(ProgressNotifier notifier, ChannelReader<(int count, WriteModel<BsonDocument>[] batch)> batchReader, ILogger workerLogger, CancellationToken token)
         {
             var sw = new Stopwatch();
             await foreach (var (count, batch) in batchReader.ReadAllAsync(token))
@@ -173,6 +196,7 @@ namespace MongoTransit.Transit
 
                 _logger.Debug("Processed batch of size {count} in {elapsed:N1} ms. Succeeded {s}. Failed {f}", count,
                     sw.ElapsedMilliseconds, results.InsertedCount + results.ModifiedCount);
+                notifier.Notify(count);
                 ArrayPool<WriteModel<BsonDocument>>.Shared.Return(batch);
             }
         }

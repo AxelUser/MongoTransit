@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using CommandLine;
 using MongoTransit.Transit;
@@ -19,8 +20,25 @@ namespace MongoTransit
                     var log = new LoggerConfiguration()
                         .WriteTo.Console(LogEventLevel.Information)
                         .CreateLogger();
-                    await TransitRunner.RunAsync(log, config, default);
+                    await TransitRunner.RunAsync(log, config, IterateCycles(toolOpts.Runs), default);
                 });
+        }
+
+        private static IEnumerable<int> IterateCycles(int cycles)
+        {
+            var cycle = 1;
+            if (cycles == 0)
+            {
+                while (true)
+                {
+                    yield return cycle++;
+                }
+            }
+
+            while (cycle <= cycles)
+            {
+                yield return cycle++;
+            }
         }
     }
 }
