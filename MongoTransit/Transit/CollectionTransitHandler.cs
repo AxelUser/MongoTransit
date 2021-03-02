@@ -68,15 +68,15 @@ namespace MongoTransit.Transit
             sw.Restart();
             try
             {
-                _logger.Debug("Starting {N} insertion workers", _options.Workers);
-                var insertionWorkers = new Task[_options.Workers];
-                for (var workerN = 0; workerN < _options.Workers; workerN++)
+                var insertionWorkers = new Task[_options.Workers * Environment.ProcessorCount];
+                _logger.Debug("Starting {N} insertion workers", insertionWorkers.Length);
+                for (var workerN = 0; workerN < insertionWorkers.Length; workerN++)
                 {
                     insertionWorkers[workerN] = RunWorker(notifier, transitChannel.Reader,
-                        _logger.ForContext("Worker", workerN), dryRun, token);
+                        _logger.ForContext("Scope", $"{_options.Collection}-{workerN:00}"), dryRun, token);
                 }
 
-                _logger.Debug("Started {N} insertion workers", _options.Workers);
+                _logger.Debug("Started {N} insertion workers", insertionWorkers.Length);
 
                 _logger.Debug("Started reading documents from source");
                 await ReadDocumentsAsync(_options.BatchSize, _options.UpsertFields, fromCursor, transitChannel.Writer,

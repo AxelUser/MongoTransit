@@ -28,7 +28,7 @@ namespace MongoTransit.Transit
                     {
                         // ReSharper disable once ConstantNullCoalescingCondition
                         handlers[idx] ??= new CollectionTransitHandler(progressNotification.Manager,
-                            logger.ForContext("Collection", options[idx].Collection), options[idx]);
+                            logger.ForContext("Scope", options[idx].Collection), options[idx]);
 
                         var currentHandler = handlers[idx];
                         var currentOptions = options[idx];
