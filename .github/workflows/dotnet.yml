@@ -23,4 +23,4 @@ jobs:
       uses: actions/upload-artifact@v2
       with:
         name: MongoTransit
-        path: MongoTransit/bin/Release/net5.0/linux-x64/publish/
+        path: MongoTransit/bin/Release/net5.0/linux-x64/publish/MongoTransit
