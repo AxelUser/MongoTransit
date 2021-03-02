@@ -1,5 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommandLine;
 using MongoTransit.Transit;
@@ -22,8 +24,16 @@ namespace MongoTransit
                         .WriteTo.Console(toolOpts.Verbose ? LogEventLevel.Debug : LogEventLevel.Information,
                             "[{Timestamp:HH:mm:ss} {Level:u3}][{Scope}] {Message:lj}{NewLine}{Exception}")
                         .Enrich.WithProperty("Scope", "Runner")
-                        .CreateLogger();    
-                    await TransitRunner.RunAsync(log, config, IterateCycles(toolOpts.Runs), toolOpts.DryRun, default);
+                        .CreateLogger(); 
+                    
+                    var cts = new CancellationTokenSource();
+                    Console.CancelKeyPress += (_, _) =>
+                    {
+                        log.Debug("Cancellation was requested");
+                        cts.Cancel();
+                    };
+                    
+                    await TransitRunner.RunAsync(log, config, IterateCycles(toolOpts.Runs), toolOpts.DryRun, cts.Token);
                 });
         }
 
