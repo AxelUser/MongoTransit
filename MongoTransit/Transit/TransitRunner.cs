@@ -10,7 +10,7 @@ namespace MongoTransit.Transit
     public static class TransitRunner
     {
         public static async Task RunAsync(ILogger logger, CollectionTransitOptions[] options,
-            IEnumerable<int> cyclesIterator, CancellationToken token)
+            IEnumerable<int> cyclesIterator, bool dryRun, CancellationToken token)
         {
             var handlers = new CollectionTransitHandler[options.Length];
             var operations = new Task[options.Length];
@@ -37,7 +37,7 @@ namespace MongoTransit.Transit
                         {
                             try
                             {
-                                await currentHandler.TransitAsync(token);
+                                await currentHandler.TransitAsync(dryRun, token);
                             }
                             catch (Exception e)
                             {

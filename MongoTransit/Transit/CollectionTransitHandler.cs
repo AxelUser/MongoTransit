@@ -38,7 +38,7 @@ namespace MongoTransit.Transit
                 .GetCollection<BsonDocument>(options.Collection);
         }
         
-        public async Task TransitAsync(CancellationToken token)
+        public async Task TransitAsync(bool dryRun, CancellationToken token)
         {
             _logger.Debug("Starting transit operation");
             
@@ -73,7 +73,7 @@ namespace MongoTransit.Transit
                 for (var workerN = 0; workerN < _options.Workers; workerN++)
                 {
                     insertionWorkers[workerN] = RunWorker(notifier, transitChannel.Reader,
-                        _logger.ForContext("Worker", workerN), token);
+                        _logger.ForContext("Worker", workerN), dryRun, token);
                 }
 
                 _logger.Debug("Started {N} insertion workers", _options.Workers);
@@ -182,7 +182,11 @@ namespace MongoTransit.Transit
             batchWriter.Complete();
         }
 
-        private async Task RunWorker(ProgressNotifier notifier, ChannelReader<(int count, WriteModel<BsonDocument>[] batch)> batchReader, ILogger workerLogger, CancellationToken token)
+        private async Task RunWorker(ProgressNotifier notifier,
+            ChannelReader<(int count, WriteModel<BsonDocument>[] batch)> batchReader,
+            ILogger workerLogger,
+            bool dryRun,
+            CancellationToken token)
         {
             var sw = new Stopwatch();
             await foreach (var (count, batch) in batchReader.ReadAllAsync(token))
@@ -190,29 +194,30 @@ namespace MongoTransit.Transit
                 try
                 {
                     workerLogger.Debug("Received batch of size {count}", count);
-#if !DEBUG
-                    sw.Restart();
-                    var results = await _toCollection.BulkWriteAsync(batch.Take(count), new BulkWriteOptions
+                    if (!dryRun)
                     {
-                        IsOrdered = false,
-                        BypassDocumentValidation = true
-                    }, token);
-                    sw.Stop();
+                        sw.Restart();
+                        var results = await _toCollection.BulkWriteAsync(batch.Take(count), new BulkWriteOptions
+                        {
+                            IsOrdered = false,
+                            BypassDocumentValidation = true
+                        }, token);
+                        sw.Stop();
 
-                    _logger.Debug("Processed batch of size {count} in {elapsed:N1} ms. Succeeded {s}. Failed {f}",
-                        count,
-                        sw.ElapsedMilliseconds, results.InsertedCount + results.ModifiedCount);
-#endif
+                        _logger.Debug("Processed batch of size {count} in {elapsed:N1} ms. Succeeded {s}. Failed {f}",
+                            count,
+                            sw.ElapsedMilliseconds, results.InsertedCount + results.ModifiedCount);
+                    }
                     notifier.Notify(count);
                     ArrayPool<WriteModel<BsonDocument>>.Shared.Return(batch);
-                }
-                catch (MongoBulkWriteException bwe)
-                {
-                    _logger.Error(bwe, "{N} documents failed to insert in {collection}", bwe.WriteErrors.Count, _options.Collection);
                 }
                 catch (OperationCanceledException)
                 {
                     throw;
+                }
+                catch (MongoBulkWriteException bwe)
+                {
+                    _logger.Error(bwe, "{N} documents failed to insert in {collection}", bwe.WriteErrors.Count, _options.Collection);
                 }
                 catch (Exception e)
                 {

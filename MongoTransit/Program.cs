@@ -19,9 +19,10 @@ namespace MongoTransit
 
                     var log = new LoggerConfiguration()
                         .MinimumLevel.Debug()
-                        .WriteTo.Console(LogEventLevel.Information, "[{Timestamp:HH:mm:ss} {Level:u3}][{Collection}{Worker}] {Message:lj}{NewLine}{Exception}")
-                        .CreateLogger();
-                    await TransitRunner.RunAsync(log, config, IterateCycles(toolOpts.Runs), default);
+                        .WriteTo.Console(toolOpts.Verbose ? LogEventLevel.Debug : LogEventLevel.Information,
+                            "[{Timestamp:HH:mm:ss} {Level:u3}][{Collection}{Worker}] {Message:lj}{NewLine}{Exception}")
+                        .CreateLogger();    
+                    await TransitRunner.RunAsync(log, config, IterateCycles(toolOpts.Runs), toolOpts.DryRun, default);
                 });
         }
 
