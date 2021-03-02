@@ -12,8 +12,8 @@ namespace MongoTransit.Transit
         public static async Task RunAsync(ILogger logger, CollectionTransitOptions[] options,
             IEnumerable<int> cyclesIterator, CancellationToken token)
         {
-            var handlers = new List<CollectionTransitHandler>(options.Length);
-            var operations = new List<Task>(options.Length);
+            var handlers = new CollectionTransitHandler[options.Length];
+            var operations = new Task[options.Length];
 
             var progressNotification = StartNotifier(logger, TimeSpan.FromSeconds(3));
             try
@@ -26,12 +26,28 @@ namespace MongoTransit.Transit
                 
                     for (var idx = 0; idx < options.Length; idx++)
                     {
+                        // ReSharper disable once ConstantNullCoalescingCondition
                         handlers[idx] ??= new CollectionTransitHandler(progressNotification.Manager,
                             logger.ForContext("Collection", options[idx].Collection), options[idx]);
-                        operations[idx] = handlers[idx].TransitAsync(token);
+
+                        var currentHandler = handlers[idx];
+                        var currentOptions = options[idx];
+                        
+                        operations[idx] = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await currentHandler.TransitAsync(token);
+                            }
+                            catch (Exception e)
+                            {
+                                logger.Error(e, "Failed to transit collection {collection}", currentOptions.Collection);
+                                throw;
+                            }
+                        }, token);
                     }
              
-                    logger.Information("Started {n} parallel transit operations", operations.Count);
+                    logger.Information("Started {n} parallel transit operations", operations.Length);
                     await Task.WhenAll(operations);
                 }
             }
@@ -47,14 +63,14 @@ namespace MongoTransit.Transit
         {
             var manager = new ProgressManager();
             var cts = new CancellationTokenSource();
-            var loop = Task.Run(() =>
+            var loop = Task.Run(async () =>
             {
                 logger.Debug("Started notification loop");
                 try
                 {
                     while (!cts.Token.IsCancellationRequested)
                     {
-                        Task.Delay(delay, cts.Token);
+                        await Task.Delay(delay, cts.Token);
                         if (manager.Available)
                         {
                             logger.Information("Progress report:\n{progress}", manager.ToString());    

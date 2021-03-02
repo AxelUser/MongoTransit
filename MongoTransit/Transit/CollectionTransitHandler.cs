@@ -69,15 +69,18 @@ namespace MongoTransit.Transit
             try
             {
                 _logger.Debug("Starting {N} insertion workers", _options.Workers);
-                var insertionWorkers = new List<Task>(_options.Workers);
+                var insertionWorkers = new Task[_options.Workers];
                 for (var workerN = 0; workerN < _options.Workers; workerN++)
                 {
-                    insertionWorkers[workerN] = RunWorker(notifier, transitChannel.Reader, _logger.ForContext("Worker", workerN), token);
+                    insertionWorkers[workerN] = RunWorker(notifier, transitChannel.Reader,
+                        _logger.ForContext("Worker", workerN), token);
                 }
+
                 _logger.Debug("Started {N} insertion workers", _options.Workers);
-            
+
                 _logger.Debug("Started reading documents from source");
-                await ReadDocumentsAsync(_options.BatchSize, _options.UpsertFields, fromCursor, transitChannel.Writer, token);
+                await ReadDocumentsAsync(_options.BatchSize, _options.UpsertFields, fromCursor, transitChannel.Writer,
+                    token);
 
                 _logger.Debug("Finished reading documents, waiting for insertion completion");
                 await Task.WhenAll(insertionWorkers);
@@ -184,26 +187,34 @@ namespace MongoTransit.Transit
             var sw = new Stopwatch();
             await foreach (var (count, batch) in batchReader.ReadAllAsync(token))
             {
-                workerLogger.Debug("Received batch of size {count}");
-                
-                sw.Restart();
-                var results = await _toCollection.BulkWriteAsync(batch.Take(count), new BulkWriteOptions
+                try
                 {
-                    IsOrdered = false,
-                    BypassDocumentValidation = true
-                }, token);
-                sw.Stop();
+                    workerLogger.Debug("Received batch of size {count}");
+#if !DEBUG
+                          sw.Restart();
+                    var results = await _toCollection.BulkWriteAsync(batch.Take(count), new BulkWriteOptions
+                    {
+                        IsOrdered = false,
+                        BypassDocumentValidation = true
+                    }, token);
+                    sw.Stop();
 
-                _logger.Debug("Processed batch of size {count} in {elapsed:N1} ms. Succeeded {s}. Failed {f}", count,
-                    sw.ElapsedMilliseconds, results.InsertedCount + results.ModifiedCount);
-                notifier.Notify(count);
-                ArrayPool<WriteModel<BsonDocument>>.Shared.Return(batch);
+                    _logger.Debug("Processed batch of size {count} in {elapsed:N1} ms. Succeeded {s}. Failed {f}", count,
+                        sw.ElapsedMilliseconds, results.InsertedCount + results.ModifiedCount);              
+#endif
+                    notifier.Notify(count);
+                    ArrayPool<WriteModel<BsonDocument>>.Shared.Return(batch);
+                }
+                catch (Exception e)
+                {
+                    _logger.Error(e, "Batch insertion failed");
+                }
             }
         }
 
         private static async Task<DateTime?> FindCheckpointAsync(IMongoCollection<BsonDocument> collection, string checkpointField, CancellationToken token)
         {
-            var checkpointBson = await collection.FindSync(new BsonDocument
+            var checkpointBson = await (await collection.FindAsync(new BsonDocument
             {
                 [checkpointField] = new BsonDocument("$exists", true)
             }, new FindOptions<BsonDocument>
@@ -215,7 +226,7 @@ namespace MongoTransit.Transit
                     ["_id"] = false,
                     [checkpointField] = true
                 }
-            }, token).SingleOrDefaultAsync(token);
+            }, token)).SingleOrDefaultAsync(token);
 
             if (checkpointBson == null)
             {

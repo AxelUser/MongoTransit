@@ -18,7 +18,7 @@ namespace MongoTransit
                     var config = ConfigurationReader.Read(toolOpts.ConfigFile).ToArray();
 
                     var log = new LoggerConfiguration()
-                        .WriteTo.Console(LogEventLevel.Information)
+                        .WriteTo.Console(LogEventLevel.Debug)
                         .CreateLogger();
                     await TransitRunner.RunAsync(log, config, IterateCycles(toolOpts.Runs), default);
                 });

@@ -4,22 +4,47 @@ using System.IO;
 using System.Threading;
 using MongoTransit.Transit;
 using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 
 namespace MongoTransit
 {
     public class ConfigurationReader
     {
-        private record Options(string ReplicaSet, string ShardedCluster, int Workers, int BatchSize,
-            CollectionOption[] Collections);
+        public class Options
+        {
+            public string From { get; set; }
 
-        private record CollectionOption(string Name, string Database, string[] UpsertFields,
-            IterativeCollectionOptions IterativeCollection);
+            public string To { get; set; }
 
-        private record IterativeCollectionOptions(string Field, bool StopOnError, DateTime ForcedCheckpoint);
+            public int Workers { get; set; }
+
+            public int BatchSize { get; set; }
+
+            public CollectionOption[] Collections { get; set; }
+        }
+
+        public class CollectionOption
+        {
+            public string Name { get; set; }
+
+            public string Database { get; set; }
+
+            public string[] UpsertFields { get; set; }
+
+            public IterativeCollectionOptions? IterativeOptions { get; set; }
+        }
+
+        public class IterativeCollectionOptions
+        {
+            public string Field { get; set; }
+
+            public DateTime? ForcedCheckpoint { get; set; }
+        }
 
         public static IEnumerable<CollectionTransitOptions> Read(string file)
         {
             var deserializer = new DeserializerBuilder()
+                .WithNamingConvention(new CamelCaseNamingConvention())
                 .Build();
 
             using var reader = File.OpenText(file);
@@ -27,12 +52,12 @@ namespace MongoTransit
 
             foreach (var coll in opts.Collections)
             {
-                var iterOpts = coll.IterativeCollection != null
-                    ? new IterativeTransitOptions(coll.IterativeCollection.Field, coll.IterativeCollection.ForcedCheckpoint)
+                var iterOpts = coll.IterativeOptions != null
+                    ? new IterativeTransitOptions(coll.IterativeOptions.Field, coll.IterativeOptions.ForcedCheckpoint)
                     : null;
 
-                yield return new CollectionTransitOptions(opts.ReplicaSet,
-                    opts.ShardedCluster, coll.Database, coll.Name, coll.UpsertFields,
+                yield return new CollectionTransitOptions(opts.From,
+                    opts.To, coll.Database, coll.Name, coll.UpsertFields,
                     opts.Workers, opts.BatchSize, iterOpts);
             }
         }
