@@ -191,7 +191,7 @@ namespace MongoTransit.Transit
                 {
                     workerLogger.Debug("Received batch of size {count}");
 #if !DEBUG
-                          sw.Restart();
+                    sw.Restart();
                     var results = await _toCollection.BulkWriteAsync(batch.Take(count), new BulkWriteOptions
                     {
                         IsOrdered = false,
@@ -199,15 +199,24 @@ namespace MongoTransit.Transit
                     }, token);
                     sw.Stop();
 
-                    _logger.Debug("Processed batch of size {count} in {elapsed:N1} ms. Succeeded {s}. Failed {f}", count,
-                        sw.ElapsedMilliseconds, results.InsertedCount + results.ModifiedCount);              
+                    _logger.Debug("Processed batch of size {count} in {elapsed:N1} ms. Succeeded {s}. Failed {f}",
+                        count,
+                        sw.ElapsedMilliseconds, results.InsertedCount + results.ModifiedCount);
 #endif
                     notifier.Notify(count);
                     ArrayPool<WriteModel<BsonDocument>>.Shared.Return(batch);
                 }
+                catch (MongoBulkWriteException bwe)
+                {
+                    _logger.Error(bwe, "{N} documents failed to insert in {collection}", bwe.WriteErrors.Count, _options.Collection);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
                 catch (Exception e)
                 {
-                    _logger.Error(e, "Batch insertion failed");
+                    _logger.Error(e, "Error occurred while inserting batch for {collection}", _options.Collection);
                 }
             }
         }
