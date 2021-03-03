@@ -43,9 +43,12 @@ namespace MongoTransit.Transit
             _logger.Debug("Starting transit operation");
             var swTransit = new Stopwatch();
             swTransit.Start();
+
+            var status = new TextStatusProvider("Checking...");
+            _manager.Attach(_options.Collection, status);
             try
             {
-                await InternalTransit(dryRun, token);
+                await InternalTransit(dryRun, status, token);
             }
             finally
             {
@@ -55,11 +58,11 @@ namespace MongoTransit.Transit
             }
         }
 
-        private async Task InternalTransit(bool dryRun, CancellationToken token)
+        private async Task InternalTransit(bool dryRun, TextStatusProvider progress, CancellationToken token)
         {
             var sw = new Stopwatch();
             var transitChannel = Channel.CreateBounded<(int count, WriteModel<BsonDocument>[] batch)>(_options.Workers);
-            var (filter, count) = await CheckCollectionAsync(token);
+            var (filter, count) = await CheckCollectionAsync(progress, token);
             sw.Stop();
             _logger.Debug("Collection check was completed in {elapsed} ms", sw.ElapsedMilliseconds);
 
@@ -117,23 +120,27 @@ namespace MongoTransit.Transit
             _logger.Information("Transferred {S} documents; Failed {F} documents", processed, failed);
         }
 
-        private async Task<(BsonDocument filter, long count)> CheckCollectionAsync(CancellationToken token)
+        private async Task<(BsonDocument filter, long count)> CheckCollectionAsync(TextStatusProvider progress,
+            CancellationToken token)
         {
             if (_options.IterativeTransferOptions != null)
             {
-                return await CheckIterativeCollectionAsync(_options.IterativeTransferOptions, token);
+                return await CheckIterativeCollectionAsync(progress, _options.IterativeTransferOptions, token);
             }
 
             var filter = new BsonDocument();
+            progress.Status = "Counting documents...";
             var count = await _fromCollection.CountDocumentsAsync(filter, cancellationToken: token);
             return (filter, count);
         }
 
-        private async Task<(BsonDocument filter, long count)> CheckIterativeCollectionAsync(IterativeTransitOptions iterOpts, CancellationToken token)
+        private async Task<(BsonDocument filter, long count)> CheckIterativeCollectionAsync(TextStatusProvider progress, IterativeTransitOptions iterOpts, CancellationToken token)
         {
             _logger.Debug("Detected iterative transit option. Fetching checkpoint and lag");
 
             var (checkpointField, forcedCheckpoint) = iterOpts;
+
+            progress.Status = "Searching checkpoint...";
 
             DateTime? lastCheckpoint;
             
@@ -155,6 +162,7 @@ namespace MongoTransit.Transit
             }
 
             _logger.Debug("Counting how many documents should be transferred");
+            progress.Status = "Counting documents...";
             var count = await CountLagAsync(checkpointField, lastCheckpoint.Value, token);
 
             _logger.Debug("Collection {Collection} has checkpoint {lastCheckpoint} and lag {lag:N0}",

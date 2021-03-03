@@ -15,7 +15,7 @@ namespace MongoTransit.Transit
             var handlers = new CollectionTransitHandler[options.Length];
             var operations = new Task[options.Length];
 
-            var progressNotification = StartNotifier(logger, TimeSpan.FromSeconds(3));
+            var progressNotification = StartNotifier(logger, TimeSpan.FromSeconds(1));
             try
             {
                 foreach (var cycle in cyclesIterator)
