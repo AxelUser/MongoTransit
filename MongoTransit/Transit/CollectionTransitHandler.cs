@@ -279,7 +279,7 @@ namespace MongoTransit.Transit
                 [checkpointField] = new BsonDocument
                 {
                     ["$exists"] = true,
-                    ["$ne"] = null
+                    ["$ne"] = BsonNull.Value
                 }
             }, new FindOptions<BsonDocument>
             {

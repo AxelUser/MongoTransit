@@ -36,8 +36,9 @@ namespace MongoTransit
                         log.Debug("Cancellation was requested");
                         cts.Cancel();
                     };
-                    
-                    await TransitRunner.RunAsync(log, config, IterateCycles(toolOpts.Runs), toolOpts.DryRun, cts.Token);
+
+                    await TransitRunner.RunAsync(log, config, IterateCycles(toolOpts.Runs), toolOpts.DryRun,
+                        TimeSpan.FromSeconds(toolOpts.NotificationInterval), cts.Token);
                 });
         }
 

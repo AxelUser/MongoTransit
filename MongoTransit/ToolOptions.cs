@@ -18,5 +18,8 @@ namespace MongoTransit
 
         [Option('l', "logs", HelpText = "Directory for storing logs")]
         public string LogsDirectory { get; set; }
+
+        [Option('n', "notify", Default = 3, HelpText = "Notification interval in seconds")]
+        public int NotificationInterval { get; set; }
     }
 }

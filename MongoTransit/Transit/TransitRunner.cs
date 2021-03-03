@@ -10,12 +10,12 @@ namespace MongoTransit.Transit
     public static class TransitRunner
     {
         public static async Task RunAsync(ILogger logger, CollectionTransitOptions[] options,
-            IEnumerable<int> cyclesIterator, bool dryRun, CancellationToken token)
+            IEnumerable<int> cyclesIterator, bool dryRun, TimeSpan notificationInterval, CancellationToken token)
         {
             var handlers = new CollectionTransitHandler[options.Length];
             var operations = new Task[options.Length];
 
-            var progressNotification = StartNotifier(logger, TimeSpan.FromSeconds(1));
+            var progressNotification = StartNotifier(logger, notificationInterval);
             try
             {
                 foreach (var cycle in cyclesIterator)
