@@ -68,7 +68,7 @@ namespace MongoTransit.Transit
             sw.Restart();
             try
             {
-                var insertionWorkers = new Task[_options.Workers * Environment.ProcessorCount];
+                var insertionWorkers = new Task<(long processed, long failed)>[_options.Workers * Environment.ProcessorCount];
                 _logger.Debug("Starting {N} insertion workers", insertionWorkers.Length);
                 for (var workerN = 0; workerN < insertionWorkers.Length; workerN++)
                 {
@@ -85,6 +85,8 @@ namespace MongoTransit.Transit
                 _logger.Debug("Finished reading documents, waiting for insertion completion");
                 await Task.WhenAll(insertionWorkers);
                 _logger.Debug("All workers finished inserting");
+
+                await LogTotalResults(insertionWorkers);
             }
             finally
             {
@@ -92,6 +94,21 @@ namespace MongoTransit.Transit
                 _logger.Debug("Transit finished in {elapsed}", sw.Elapsed);
                 _manager.Detach(_options.Collection);
             }
+        }
+
+        private async Task LogTotalResults(Task<(long processed, long failed)>[] insertionWorkers)
+        {
+            var processed = 0L;
+            var failed = 0L;
+
+            foreach (var worker in insertionWorkers)
+            {
+                var (s, f) = await worker;
+                processed += s;
+                failed += f;
+            }
+
+            _logger.Information("Transferred {S} documents; Failed {F} documents", processed, failed);
         }
 
         private async Task<(BsonDocument filter, long count)> CheckCollectionAsync(CancellationToken token)
@@ -182,13 +199,17 @@ namespace MongoTransit.Transit
             batchWriter.Complete();
         }
 
-        private async Task RunWorker(ProgressNotifier notifier,
+        private async Task<(long processed, long failed)> RunWorker(ProgressNotifier notifier,
             ChannelReader<(int count, WriteModel<BsonDocument>[] batch)> batchReader,
             ILogger workerLogger,
             bool dryRun,
             CancellationToken token)
         {
             var sw = new Stopwatch();
+            
+            var totalProcessed = 0L;
+            var totalFailed = 0L;
+            
             await foreach (var (count, batch) in batchReader.ReadAllAsync(token))
             {
                 try
@@ -204,9 +225,13 @@ namespace MongoTransit.Transit
                         }, token);
                         sw.Stop();
 
-                        _logger.Debug("Processed batch of size {count} in {elapsed:N1} ms. Succeeded {s}. Failed {f}",
+                        var processedCount = results.InsertedCount + results.ModifiedCount;
+                        
+                        _logger.Debug("Processed batch of size {count} in {elapsed:N1} ms. Succeeded {s}.",
                             count,
-                            sw.ElapsedMilliseconds, results.InsertedCount + results.ModifiedCount);
+                            sw.ElapsedMilliseconds, processedCount);
+
+                        totalProcessed += processedCount;
                     }
                     notifier.Notify(count);
                     ArrayPool<WriteModel<BsonDocument>>.Shared.Return(batch);
@@ -218,12 +243,15 @@ namespace MongoTransit.Transit
                 catch (MongoBulkWriteException bwe)
                 {
                     _logger.Error(bwe, "{N} documents failed to insert in {collection}", bwe.WriteErrors.Count, _options.Collection);
+                    totalFailed += bwe.WriteErrors.Count;
                 }
                 catch (Exception e)
                 {
                     _logger.Error(e, "Error occurred while inserting batch for {collection}", _options.Collection);
                 }
             }
+
+            return (totalProcessed, totalFailed);
         }
 
         private static async Task<DateTime?> FindCheckpointAsync(IMongoCollection<BsonDocument> collection, string checkpointField, CancellationToken token)
