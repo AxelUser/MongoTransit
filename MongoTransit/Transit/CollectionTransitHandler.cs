@@ -41,15 +41,28 @@ namespace MongoTransit.Transit
         public async Task TransitAsync(bool dryRun, CancellationToken token)
         {
             _logger.Debug("Starting transit operation");
-            
-            var transitChannel = Channel.CreateBounded<(int count, WriteModel<BsonDocument>[] batch)>(_options.Workers);
+            var swTransit = new Stopwatch();
+            swTransit.Start();
+            try
+            {
+                await InternalTransit(dryRun, token);
+            }
+            finally
+            {
+                swTransit.Stop();
+                _logger.Debug("Transit finished in {elapsed}", swTransit.Elapsed);
+                _manager.Detach(_options.Collection);
+            }
+        }
 
+        private async Task InternalTransit(bool dryRun, CancellationToken token)
+        {
             var sw = new Stopwatch();
-            sw.Start();
+            var transitChannel = Channel.CreateBounded<(int count, WriteModel<BsonDocument>[] batch)>(_options.Workers);
             var (filter, count) = await CheckCollectionAsync(token);
             sw.Stop();
             _logger.Debug("Collection check was completed in {elapsed} ms", sw.ElapsedMilliseconds);
-            
+
             if (count == 0)
             {
                 _logger.Information("Collection {Collection} is up-to date, skipping transit", _options.Collection);
@@ -65,38 +78,31 @@ namespace MongoTransit.Transit
 
             var notifier = new ProgressNotifier(count);
             _manager.Attach(_options.Collection, notifier);
+            
             sw.Restart();
-            try
+
+            var insertionWorkers = new Task<(long processed, long failed)>[_options.Workers * Environment.ProcessorCount];
+
+            for (var workerN = 0; workerN < insertionWorkers.Length; workerN++)
             {
-                var insertionWorkers = new Task<(long processed, long failed)>[_options.Workers * Environment.ProcessorCount];
-                _logger.Debug("Starting {N} insertion workers", insertionWorkers.Length);
-                for (var workerN = 0; workerN < insertionWorkers.Length; workerN++)
-                {
-                    insertionWorkers[workerN] = RunWorker(notifier, transitChannel.Reader,
-                        _logger.ForContext("Scope", $"{_options.Collection}-{workerN:00}"), dryRun, token);
-                }
-
-                _logger.Debug("Started {N} insertion workers", insertionWorkers.Length);
-
-                _logger.Debug("Started reading documents from source");
-                await ReadDocumentsAsync(_options.BatchSize, _options.UpsertFields, fromCursor, transitChannel.Writer,
-                    token);
-
-                _logger.Debug("Finished reading documents, waiting for insertion completion");
-                await Task.WhenAll(insertionWorkers);
-                _logger.Debug("All workers finished inserting");
-
-                await LogTotalResults(insertionWorkers);
+                insertionWorkers[workerN] = RunWorker(notifier, transitChannel.Reader,
+                    _logger.ForContext("Scope", $"{_options.Collection}-{workerN:00}"), dryRun, token);
             }
-            finally
-            {
-                sw.Stop();
-                _logger.Debug("Transit finished in {elapsed}", sw.Elapsed);
-                _manager.Detach(_options.Collection);
-            }
+
+            _logger.Debug("Started {N} insertion workers", insertionWorkers.Length);
+
+            _logger.Debug("Started reading documents from source");
+            await ReadDocumentsAsync(_options.BatchSize, _options.UpsertFields, fromCursor, transitChannel.Writer,
+                token);
+
+            _logger.Debug("Finished reading documents, waiting for insertion completion");
+            await Task.WhenAll(insertionWorkers);
+            _logger.Debug("Transfer was completed in {elapsed}", sw.Elapsed);
+
+            await LogTotalResults(insertionWorkers);
         }
 
-        private async Task LogTotalResults(Task<(long processed, long failed)>[] insertionWorkers)
+        private async Task LogTotalResults(IEnumerable<Task<(long processed, long failed)>> insertionWorkers)
         {
             var processed = 0L;
             var failed = 0L;
@@ -262,10 +268,14 @@ namespace MongoTransit.Transit
         {
             var checkpointBson = await (await collection.FindAsync(new BsonDocument
             {
-                [checkpointField] = new BsonDocument("$exists", true)
+                [checkpointField] = new BsonDocument
+                {
+                    ["$exists"] = true,
+                    ["$ne"] = null
+                }
             }, new FindOptions<BsonDocument>
             {
-                Sort = new BsonDocument(checkpointField, 1),
+                Sort = new BsonDocument(checkpointField, -1),
                 Limit = 1,
                 Projection = new BsonDocument
                 {
