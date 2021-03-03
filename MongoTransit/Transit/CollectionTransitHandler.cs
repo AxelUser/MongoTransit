@@ -225,11 +225,10 @@ namespace MongoTransit.Transit
                         }, token);
                         sw.Stop();
 
-                        var processedCount = results.MatchedCount;
-                        
-                        _logger.Debug("Processed batch of size {count} in {elapsed:N1} ms. Succeeded {s}.",
-                            count,
-                            sw.ElapsedMilliseconds, processedCount);
+                        var processedCount = GetSuccessfulOperationsCount(results);
+
+                        _logger.Debug("Processed {s} documents from batch of size {count} in {elapsed:N1} ms",
+                            processedCount, count, sw.ElapsedMilliseconds);
 
                         totalProcessed += processedCount;
                     }
@@ -242,18 +241,22 @@ namespace MongoTransit.Transit
                 }
                 catch (MongoBulkWriteException<BsonDocument> bwe)
                 {
-                    _logger.Error(bwe, "{N} documents failed to insert in {collection}", bwe.WriteErrors.Count, _options.Collection);
+                    _logger.Error("{N} documents failed to transfer in {collection}", bwe.WriteErrors.Count, _options.Collection);
+                    _logger.Debug(bwe, "Bulk write exception details:");
                     totalFailed += bwe.WriteErrors.Count;
-                    totalProcessed += bwe.Result.MatchedCount;
+                    totalProcessed += GetSuccessfulOperationsCount(bwe.Result);
                 }
                 catch (Exception e)
                 {
-                    _logger.Error(e, "Error occurred while inserting batch for {collection}", _options.Collection);
+                    _logger.Error(e, "Error occurred while transferring documents to {collection}", _options.Collection);
                 }
             }
 
             return (totalProcessed, totalFailed);
         }
+
+        private static long GetSuccessfulOperationsCount(BulkWriteResult results) =>
+            results.MatchedCount + results.Upserts.Count;
 
         private static async Task<DateTime?> FindCheckpointAsync(IMongoCollection<BsonDocument> collection, string checkpointField, CancellationToken token)
         {
@@ -262,7 +265,7 @@ namespace MongoTransit.Transit
                 [checkpointField] = new BsonDocument("$exists", true)
             }, new FindOptions<BsonDocument>
             {
-                Sort = new BsonDocument(checkpointField, -1),
+                Sort = new BsonDocument(checkpointField, 1),
                 Limit = 1,
                 Projection = new BsonDocument
                 {

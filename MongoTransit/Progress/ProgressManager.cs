@@ -32,7 +32,7 @@ namespace MongoTransit.Progress
             {
                 var (current, max) = notifier.Progress;
                 var percentage = (double)current / max;
-                sb.AppendLine($"{name}: {percentage:P1} ( {current:N} / {max:N} )");
+                sb.AppendLine($"{name}: {percentage:P1} ( {current:N0} / {max:N0} )");
             }
 
             return sb.ToString();

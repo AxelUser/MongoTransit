@@ -10,7 +10,7 @@ namespace MongoTransit
 {
     public class ConfigurationReader
     {
-        public class Options
+        private class Options
         {
             public string From { get; set; }
 
@@ -23,7 +23,7 @@ namespace MongoTransit
             public CollectionOption[] Collections { get; set; }
         }
 
-        public class CollectionOption
+        private class CollectionOption
         {
             public string Name { get; set; }
 
@@ -34,7 +34,7 @@ namespace MongoTransit
             public IterativeCollectionOptions? IterativeOptions { get; set; }
         }
 
-        public class IterativeCollectionOptions
+        private class IterativeCollectionOptions
         {
             public string Field { get; set; }
 
@@ -44,7 +44,7 @@ namespace MongoTransit
         public static IEnumerable<CollectionTransitOptions> Read(string file)
         {
             var deserializer = new DeserializerBuilder()
-                .WithNamingConvention(new CamelCaseNamingConvention())
+                .WithNamingConvention(CamelCaseNamingConvention.Instance)
                 .Build();
 
             using var reader = File.OpenText(file);
