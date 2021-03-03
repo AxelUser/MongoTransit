@@ -225,7 +225,7 @@ namespace MongoTransit.Transit
                         }, token);
                         sw.Stop();
 
-                        var processedCount = results.InsertedCount + results.ModifiedCount;
+                        var processedCount = results.MatchedCount;
                         
                         _logger.Debug("Processed batch of size {count} in {elapsed:N1} ms. Succeeded {s}.",
                             count,
@@ -240,10 +240,11 @@ namespace MongoTransit.Transit
                 {
                     throw;
                 }
-                catch (MongoBulkWriteException bwe)
+                catch (MongoBulkWriteException<BsonDocument> bwe)
                 {
                     _logger.Error(bwe, "{N} documents failed to insert in {collection}", bwe.WriteErrors.Count, _options.Collection);
                     totalFailed += bwe.WriteErrors.Count;
+                    totalProcessed += bwe.Result.MatchedCount;
                 }
                 catch (Exception e)
                 {

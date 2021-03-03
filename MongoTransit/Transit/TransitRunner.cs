@@ -90,7 +90,14 @@ namespace MongoTransit.Transit
         {
             var (task, _, cancellationTokenSource) = loop;
             cancellationTokenSource.Cancel();
-            await task;
+            try
+            {
+                await task;
+            }
+            catch
+            {
+                // No matter what happened
+            }
         }
     }
 }
