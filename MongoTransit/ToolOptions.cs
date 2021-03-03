@@ -15,5 +15,8 @@ namespace MongoTransit
 
         [Option('d', "dry", HelpText = "Run tool without inserting or updating records")]
         public bool DryRun { get; set; }
+
+        [Option('l', "logs", HelpText = "Directory for storing logs")]
+        public string LogsDirectory { get; set; }
     }
 }

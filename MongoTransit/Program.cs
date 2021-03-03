@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,11 +20,14 @@ namespace MongoTransit
                 {
                     var config = ConfigurationReader.Read(toolOpts.ConfigFile).ToArray();
 
+                    var logPath = Path.Join(toolOpts.LogsDirectory ?? "", $"transit_{DateTime.Now:yyyy_MM_dd}.log");
                     var log = new LoggerConfiguration()
                         .MinimumLevel.Debug()
+                        .Enrich.WithProperty("Scope", "Runner")
                         .WriteTo.Console(toolOpts.Verbose ? LogEventLevel.Debug : LogEventLevel.Information,
                             "[{Timestamp:HH:mm:ss} {Level:u3}][{Scope}] {Message:lj}{NewLine}{Exception}")
-                        .Enrich.WithProperty("Scope", "Runner")
+                        .WriteTo.File(logPath,
+                            outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}][{Scope}] {Message:lj}{NewLine}{Exception}")
                         .CreateLogger(); 
                     
                     var cts = new CancellationTokenSource();
