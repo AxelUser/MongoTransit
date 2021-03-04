@@ -196,7 +196,6 @@ namespace MongoTransit.Transit
                 }
                 else
                 {
-                    _logger.Debug("Prepared batch of size {count}", count);
                     await batchWriter.WriteAsync((count, batch), token);
                     count = 0;
                     batch = ArrayPool<WriteModel<BsonDocument>>.Shared.Rent(batchSize);
@@ -206,7 +205,6 @@ namespace MongoTransit.Transit
             // Handle case when cursor is finished, but there are some documents less than batch.
             if (count > 0)
             {
-                _logger.Debug("Flushing the remaining batch of size {count}", count);
                 // Flush remaining documents
                 await batchWriter.WriteAsync((count, batch), token);
             }
@@ -228,7 +226,6 @@ namespace MongoTransit.Transit
             {
                 try
                 {
-                    workerLogger.Debug("Received batch of size {count}", count);
                     if (!dryRun)
                     {
                         sw.Restart();
