@@ -18,8 +18,7 @@ namespace MongoTransit
             await Parser.Default.ParseArguments<ToolOptions>(args)
                 .WithParsedAsync(async toolOpts =>
                 {
-                    var config = ConfigurationReader.Read(toolOpts.ConfigFile).ToArray();
-
+                    var collectionConfigs = CreateConfigurations(toolOpts).ToArray();
                     var logPath = Path.Join(toolOpts.LogsDirectory ?? "", $"transit_{DateTime.Now:yyyy_MM_dd}.log");
                     var log = new LoggerConfiguration()
                         .MinimumLevel.Debug()
@@ -37,9 +36,25 @@ namespace MongoTransit
                         cts.Cancel();
                     };
 
-                    await TransitRunner.RunAsync(log, config, IterateCycles(toolOpts.Runs), toolOpts.DryRun,
+                    await TransitRunner.RunAsync(log, collectionConfigs, IterateCycles(toolOpts.Runs), toolOpts.DryRun,
                         TimeSpan.FromSeconds(toolOpts.NotificationInterval), cts.Token);
                 });
+        }
+
+        private static IEnumerable<CollectionTransitOptions> CreateConfigurations(ToolOptions toolOptions)
+        {
+            var config = ConfigurationReader.Read(toolOptions.ConfigFile).ToArray();
+            
+            foreach (var coll in config)
+            {
+                var iterOpts = coll.IterativeOptions != null
+                    ? new IterativeTransitOptions(coll.IterativeOptions.Field, coll.IterativeOptions.ForcedCheckpoint)
+                    : null;
+
+                yield return new CollectionTransitOptions(toolOptions.SourceConnectionString,
+                    toolOptions.DestinationConnectionString, coll.Database, coll.Name, coll.UpsertFields,
+                    toolOptions.WorkersPerCpu, toolOptions.BatchSize, iterOpts);
+            }
         }
 
         private static IEnumerable<int> IterateCycles(int cycles)

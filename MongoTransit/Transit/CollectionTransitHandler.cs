@@ -29,12 +29,12 @@ namespace MongoTransit.Transit
             
             // TODO check DB for existence
             // TODO check collection for existence
-            _fromCollection = new MongoClient(options.FromConnectionString).GetDatabase(options.Database)
+            _fromCollection = new MongoClient(options.SourceConnectionString).GetDatabase(options.Database)
                 .GetCollection<BsonDocument>(options.Collection);
 
             // TODO check DB for existence
             // TODO check collection for existence
-            _toCollection = new MongoClient(options.ToConnectionString).GetDatabase(options.Database)
+            _toCollection = new MongoClient(options.DestinationConnectionString).GetDatabase(options.Database)
                 .GetCollection<BsonDocument>(options.Collection);
         }
         
@@ -173,7 +173,7 @@ namespace MongoTransit.Transit
             return (filter, count);
         }
 
-        private async Task ReadDocumentsAsync(int batchSize, string[] upsertFields, IAsyncCursor<BsonDocument> documentsReader,
+        private async Task ReadDocumentsAsync(int batchSize, string[]? upsertFields, IAsyncCursor<BsonDocument> documentsReader,
             ChannelWriter<(int count, WriteModel<BsonDocument>[] batch)> batchWriter, CancellationToken token)
         {
             WriteModel<BsonDocument>[] batch = ArrayPool<WriteModel<BsonDocument>>.Shared.Rent(batchSize);
@@ -183,9 +183,16 @@ namespace MongoTransit.Transit
                 if (count < batchSize)
                 {
                     var filter = new BsonDocument();
-                    foreach (var field in upsertFields)
+                    if (upsertFields?.Any() == true)
                     {
-                        filter[field] = document[field];
+                        foreach (var field in upsertFields)
+                        {
+                            filter[field] = document[field];
+                        }   
+                    }
+                    else
+                    {
+                        filter["_id"] = document["_id"];
                     }
 
                     batch[count] = new ReplaceOneModel<BsonDocument>(filter, document)
@@ -238,7 +245,7 @@ namespace MongoTransit.Transit
 
                         var processedCount = GetSuccessfulOperationsCount(results);
 
-                        _logger.Debug("Processed {s} documents from batch of size {count} in {elapsed:N1} ms",
+                        workerLogger.Debug("Processed {s} documents from batch of size {count} in {elapsed:N1} ms",
                             processedCount, count, sw.ElapsedMilliseconds);
 
                         totalProcessed += processedCount;
@@ -252,14 +259,14 @@ namespace MongoTransit.Transit
                 }
                 catch (MongoBulkWriteException<BsonDocument> bwe)
                 {
-                    _logger.Error("{N} documents failed to transfer in {collection}", bwe.WriteErrors.Count, _options.Collection);
-                    _logger.Debug(bwe, "Bulk write exception details:");
+                    workerLogger.Error("{N} documents failed to transfer in {collection}", bwe.WriteErrors.Count, _options.Collection);
+                    workerLogger.Debug(bwe, "Bulk write exception details:");
                     totalFailed += bwe.WriteErrors.Count;
                     totalProcessed += GetSuccessfulOperationsCount(bwe.Result);
                 }
                 catch (Exception e)
                 {
-                    _logger.Error(e, "Error occurred while transferring documents to {collection}", _options.Collection);
+                    workerLogger.Error(e, "Error occurred while transferring documents to {collection}", _options.Collection);
                 }
             }
 
