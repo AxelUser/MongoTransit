@@ -52,8 +52,8 @@ namespace MongoTransit
                     : null;
 
                 yield return new CollectionTransitOptions(toolOptions.SourceConnectionString,
-                    toolOptions.DestinationConnectionString, coll.Database, coll.Name, coll.UpsertFields,
-                    toolOptions.WorkersPerCpu, toolOptions.BatchSize, iterOpts);
+                    toolOptions.DestinationConnectionString, coll.Database, coll.Name, coll.KeyFields,
+                    coll.FetchKeyFromDestination, toolOptions.WorkersPerCpu, toolOptions.BatchSize, !coll.NoUpsert, iterOpts);
             }
         }
 

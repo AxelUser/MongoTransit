@@ -14,7 +14,11 @@ namespace MongoTransit
 
             public string Database { get; set; }
 
-            public string[]? UpsertFields { get; set; }
+            public string[]? KeyFields { get; set; }
+
+            public bool FetchKeyFromDestination { get; set; }
+
+            public bool NoUpsert { get; set; }
 
             public IterativeCollectionOptions? IterativeOptions { get; set; }
         }

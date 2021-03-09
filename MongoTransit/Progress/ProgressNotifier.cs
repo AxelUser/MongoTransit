@@ -13,7 +13,7 @@ namespace MongoTransit.Progress
             _current = 0;
         }
 
-        public void Notify(int processed)
+        public void Notify(long processed)
         {
             Interlocked.Add(ref _current, processed);
         }

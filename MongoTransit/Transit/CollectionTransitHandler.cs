@@ -15,6 +15,9 @@ namespace MongoTransit.Transit
 {
     public class CollectionTransitHandler
     {
+        private const string ErrorUpdateWithMoveToAnotherShard =
+            "Document shard key value updates that cause the doc to move shards must be sent with write batch of size 1";
+        
         private readonly ProgressManager _manager;
         private readonly ILogger _logger;
         private readonly CollectionTransitOptions _options;
@@ -61,7 +64,8 @@ namespace MongoTransit.Transit
         private async Task InternalTransit(bool dryRun, TextStatusProvider progress, CancellationToken token)
         {
             var sw = new Stopwatch();
-            var transitChannel = Channel.CreateBounded<(int count, WriteModel<BsonDocument>[] batch)>(_options.Workers);
+            var transitChannel = Channel.CreateBounded<(int count, ReplaceOneModel<BsonDocument>[] batch)>(_options.Workers);
+            var retriesChannel = Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>();
             var (filter, count) = await CheckCollectionAsync(progress, token);
             sw.Stop();
             _logger.Debug("Collection check was completed in {elapsed} ms", sw.ElapsedMilliseconds);
@@ -84,19 +88,18 @@ namespace MongoTransit.Transit
             
             sw.Restart();
 
-            var insertionWorkers = new Task<(long processed, long failed)>[_options.Workers * Environment.ProcessorCount];
+            var insertionWorkers = new Task<(long processed, long retried, long failed)>[_options.Workers * Environment.ProcessorCount];
 
             for (var workerN = 0; workerN < insertionWorkers.Length; workerN++)
             {
-                insertionWorkers[workerN] = RunWorker(notifier, transitChannel.Reader,
-                    _logger.ForContext("Scope", $"{_options.Collection}-{workerN:00}"), dryRun, token);
+                insertionWorkers[workerN] = RunWorker(notifier, transitChannel.Reader, retriesChannel.Writer,
+                    _logger.ForContext("Scope", $"{_options.Collection}-Retry"), dryRun, token);
             }
 
             _logger.Debug("Started {N} insertion workers", insertionWorkers.Length);
 
             _logger.Debug("Started reading documents from source");
-            await ReadDocumentsAsync(_options.BatchSize, _options.UpsertFields, fromCursor, transitChannel.Writer,
-                token);
+            await ReadDocumentsAsync(fromCursor, transitChannel.Writer, token);
 
             _logger.Debug("Finished reading documents, waiting for insertion completion");
             await Task.WhenAll(insertionWorkers);
@@ -105,19 +108,21 @@ namespace MongoTransit.Transit
             await LogTotalResults(insertionWorkers);
         }
 
-        private async Task LogTotalResults(IEnumerable<Task<(long processed, long failed)>> insertionWorkers)
+        private async Task LogTotalResults(IEnumerable<Task<(long processed, long retried, long failed)>> insertionWorkers)
         {
             var processed = 0L;
+            var retried = 0L;
             var failed = 0L;
 
             foreach (var worker in insertionWorkers)
             {
-                var (s, f) = await worker;
+                var (s, r, f) = await worker;
                 processed += s;
+                retried += r;
                 failed += f;
             }
 
-            _logger.Information("Transferred {S} documents; Failed {F} documents", processed, failed);
+            _logger.Information("Transferred {S}; Retried {R}; Failed {F};", processed, retried, failed);
         }
 
         private async Task<(BsonDocument filter, long count)> CheckCollectionAsync(TextStatusProvider progress,
@@ -173,32 +178,42 @@ namespace MongoTransit.Transit
             return (filter, count);
         }
 
-        private async Task ReadDocumentsAsync(int batchSize, string[]? upsertFields, IAsyncCursor<BsonDocument> documentsReader,
-            ChannelWriter<(int count, WriteModel<BsonDocument>[] batch)> batchWriter, CancellationToken token)
+        private async Task ReadDocumentsAsync(IAsyncCursor<BsonDocument> documentsReader,
+            ChannelWriter<(int count, ReplaceOneModel<BsonDocument>[] batch)> batchWriter, CancellationToken token)
         {
-            WriteModel<BsonDocument>[] batch = ArrayPool<WriteModel<BsonDocument>>.Shared.Rent(batchSize);
+            var batch = ArrayPool<ReplaceOneModel<BsonDocument>>.Shared.Rent(_options.BatchSize);
             var count = 0;
             await documentsReader.ForEachAsync(async document =>
             {
-                if (count < batchSize)
+                if (count < _options.BatchSize)
                 {
-                    var filter = new BsonDocument();
-                    var hasUpsert = upsertFields?.Any() == true;
-                    if (hasUpsert)
+                    var fields = document;
+                    if (_options.FetchKeyFromDestination)
                     {
-                        foreach (var field in upsertFields!)
+                        // TODO maybe defer and put it in batch
+                        var foundDestinationDoc = await (await _toCollection.FindAsync(new BsonDocument("_id", document["_id"]),
+                            cancellationToken: token)).SingleOrDefaultAsync(token);
+                        if (foundDestinationDoc != null)
                         {
-                            filter[field] = document[field];
+                            fields = foundDestinationDoc;
+                        }
+                    }
+                    var filter = new BsonDocument();
+                    if (_options.KeyFields?.Any() == true)
+                    {
+                        foreach (var field in _options.KeyFields)
+                        {
+                            filter[field] = fields[field];
                         }   
                     }
                     else
                     {
-                        filter["_id"] = document["_id"];
+                        filter["_id"] = fields["_id"];
                     }
 
                     batch[count] = new ReplaceOneModel<BsonDocument>(filter, document)
                     {
-                        IsUpsert = hasUpsert
+                        IsUpsert = _options.Upsert
                     };
                     count++;
                 }
@@ -206,7 +221,7 @@ namespace MongoTransit.Transit
                 {
                     await batchWriter.WriteAsync((count, batch), token);
                     count = 0;
-                    batch = ArrayPool<WriteModel<BsonDocument>>.Shared.Rent(batchSize);
+                    batch = ArrayPool<ReplaceOneModel<BsonDocument>>.Shared.Rent(_options.BatchSize);
                 }
             }, token);
 
@@ -219,8 +234,9 @@ namespace MongoTransit.Transit
             batchWriter.Complete();
         }
 
-        private async Task<(long processed, long failed)> RunWorker(ProgressNotifier notifier,
-            ChannelReader<(int count, WriteModel<BsonDocument>[] batch)> batchReader,
+        private async Task<(long processed, long totalRetried, long failed)> RunWorker(ProgressNotifier notifier,
+            ChannelReader<(int count, ReplaceOneModel<BsonDocument>[] batch)> batchReader,
+            ChannelWriter<ReplaceOneModel<BsonDocument>> failedWrites,
             ILogger workerLogger,
             bool dryRun,
             CancellationToken token)
@@ -228,18 +244,20 @@ namespace MongoTransit.Transit
             var sw = new Stopwatch();
             
             var totalProcessed = 0L;
+            var totalRetried = 0L;
             var totalFailed = 0L;
             
             await foreach (var (count, batch) in batchReader.ReadAllAsync(token))
             {
+                var requests = batch.Take(count).ToArray();
                 try
                 {
                     if (!dryRun)
                     {
                         sw.Restart();
-                        var results = await _toCollection.BulkWriteAsync(batch.Take(count), new BulkWriteOptions
+                        var results = await _toCollection.BulkWriteAsync(requests, new BulkWriteOptions
                         {
-                            IsOrdered = false,
+                            IsOrdered = true,
                             BypassDocumentValidation = true
                         }, token);
                         sw.Stop();
@@ -262,7 +280,25 @@ namespace MongoTransit.Transit
                 {
                     workerLogger.Error("{N} documents failed to transfer in {collection}", bwe.WriteErrors.Count, _options.Collection);
                     workerLogger.Debug(bwe, "Bulk write exception details:");
-                    totalFailed += bwe.WriteErrors.Count;
+
+                    var retries = 0;
+                    var fails = 0;
+                    foreach (var error in bwe.WriteErrors)
+                    {
+                        switch (error.Message)
+                        {
+                            case ErrorUpdateWithMoveToAnotherShard:
+                                await failedWrites.WriteAsync(requests[error.Index], token);
+                                retries++;
+                                break;
+                            default:
+                                fails++;
+                                break;
+                        }
+                    }
+                    
+                    totalFailed += fails;
+                    totalRetried += retries;
                     totalProcessed += GetSuccessfulOperationsCount(bwe.Result);
                 }
                 catch (Exception e)
@@ -271,7 +307,58 @@ namespace MongoTransit.Transit
                 }
             }
 
-            return (totalProcessed, totalFailed);
+            return (totalProcessed, totalRetried, totalFailed);
+        }
+
+        private async Task<(long processed, long totalRetried, long failed)> RunRetryWorker(ProgressNotifier notifier,
+            ChannelReader<ReplaceOneModel<BsonDocument>> failedWrites,
+            ILogger workerLogger,
+            bool dryRun,
+            CancellationToken token)
+        {
+            var sw = new Stopwatch();
+            
+            var totalProcessed = 0L;
+            var totalFailed = 0L;
+            
+            await foreach (var failedReplace in failedWrites.ReadAllAsync(token))
+            {
+                var documentId = failedReplace.Replacement["_id"].AsObjectId;
+                try
+                {
+                    if (!dryRun)
+                    {
+                        sw.Restart();
+                        await _toCollection.ReplaceOneAsync(failedReplace.Filter, failedReplace.Replacement, new ReplaceOptions
+                        {
+                            IsUpsert = _options.Upsert,
+                            BypassDocumentValidation = true
+                        }, token);
+                        sw.Stop();
+                        
+                        workerLogger.Debug("Successfully retried replacement of document (ID: {id}) in {elapsed:N1} ms", documentId, sw.ElapsedMilliseconds);
+
+                        totalProcessed++;
+                    }
+                    notifier.Notify(1);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (MongoWriteException we)
+                {
+                    workerLogger.Error("Failed to retry replacement (ID: {id}): {msg}", documentId, we.Message);
+                    workerLogger.Debug(we, "Retry exception details:");
+                    totalFailed++;
+                }
+                catch (Exception e)
+                {
+                    workerLogger.Error(e, "Error occurred while transferring documents to {collection}", _options.Collection);
+                }
+            }
+            
+            return (totalProcessed, 0, totalFailed);
         }
 
         private static long GetSuccessfulOperationsCount(BulkWriteResult results) =>
