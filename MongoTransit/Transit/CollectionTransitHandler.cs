@@ -88,24 +88,38 @@ namespace MongoTransit.Transit
             
             sw.Restart();
 
-            var insertionWorkers = new Task<(long processed, long retried, long failed)>[_options.Workers * Environment.ProcessorCount];
-
-            for (var workerN = 0; workerN < insertionWorkers.Length; workerN++)
+            var insertionWorkersCount = _options.Workers * Environment.ProcessorCount;
+            var retryWorkersCount = 1;
+            var workers = new List<Task<(long processed, long retried, long failed)>>();
+            var retriers = new List<Task<(long processed, long retried, long failed)>>();
+            
+            for (var workerN = 0; workerN < insertionWorkersCount; workerN++)
             {
-                insertionWorkers[workerN] = RunWorker(notifier, transitChannel.Reader, retriesChannel.Writer,
-                    _logger.ForContext("Scope", $"{_options.Collection}-Retry"), dryRun, token);
+                workers.Add(RunWorker(notifier, transitChannel.Reader, retriesChannel.Writer,
+                    _logger.ForContext("Scope", $"{_options.Collection}-{workerN:00}"), dryRun, token));
             }
 
-            _logger.Debug("Started {N} insertion workers", insertionWorkers.Length);
+            for (var retryWorkerN = 0; retryWorkerN < retryWorkersCount; retryWorkerN++)
+            {
+                retriers.Add(RunRetryWorker(notifier, retriesChannel.Reader,
+                    _logger.ForContext("Scope", $"{_options.Collection}-Retry{retryWorkerN:00}"), dryRun, token));
+            }
+
+            _logger.Debug("Started {I} insertion worker(s) and {R} retry worker(s)", insertionWorkersCount, retryWorkersCount);
 
             _logger.Debug("Started reading documents from source");
             await ReadDocumentsAsync(fromCursor, transitChannel.Writer, token);
 
-            _logger.Debug("Finished reading documents, waiting for insertion completion");
-            await Task.WhenAll(insertionWorkers);
+            _logger.Debug("Finished reading documents, waiting for insertion-workers");
+            await Task.WhenAll(workers);
+            
+            _logger.Debug("Insertion-workers finished, waiting for retry-workers");
+            retriesChannel.Writer.Complete();
+            await Task.WhenAll(retriers);
+            
             _logger.Debug("Transfer was completed in {elapsed}", sw.Elapsed);
 
-            await LogTotalResults(insertionWorkers);
+            await LogTotalResults(workers.Concat(retriers));
         }
 
         private async Task LogTotalResults(IEnumerable<Task<(long processed, long retried, long failed)>> insertionWorkers)
@@ -278,9 +292,6 @@ namespace MongoTransit.Transit
                 }
                 catch (MongoBulkWriteException<BsonDocument> bwe)
                 {
-                    workerLogger.Error("{N} documents failed to transfer in {collection}", bwe.WriteErrors.Count, _options.Collection);
-                    workerLogger.Debug(bwe, "Bulk write exception details:");
-
                     var retries = 0;
                     var fails = 0;
                     foreach (var error in bwe.WriteErrors)
@@ -300,6 +311,9 @@ namespace MongoTransit.Transit
                     totalFailed += fails;
                     totalRetried += retries;
                     totalProcessed += GetSuccessfulOperationsCount(bwe.Result);
+                    
+                    workerLogger.Error("{N} documents failed to transfer, {R} were sent to retry", fails, retries);
+                    workerLogger.Debug(bwe, "Bulk write exception details:");
                 }
                 catch (Exception e)
                 {
