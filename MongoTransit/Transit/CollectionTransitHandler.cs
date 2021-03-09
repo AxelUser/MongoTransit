@@ -1,6 +1,5 @@
 using System;
 using System.Buffers;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -15,9 +14,6 @@ namespace MongoTransit.Transit
 {
     public class CollectionTransitHandler
     {
-        private const string ErrorUpdateWithMoveToAnotherShard =
-            "Document shard key value updates that cause the doc to move shards must be sent with write batch of size 1";
-        
         private readonly ProgressManager _manager;
         private readonly ILogger _logger;
         private readonly CollectionTransitOptions _options;
@@ -65,7 +61,7 @@ namespace MongoTransit.Transit
         {
             var sw = new Stopwatch();
             var transitChannel = Channel.CreateBounded<(int count, ReplaceOneModel<BsonDocument>[] batch)>(_options.Workers);
-            var retriesChannel = Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>();
+
             var (filter, count) = await CheckCollectionAsync(progress, token);
             sw.Stop();
             _logger.Debug("Collection check was completed in {elapsed} ms", sw.ElapsedMilliseconds);
@@ -85,57 +81,22 @@ namespace MongoTransit.Transit
 
             var notifier = new ProgressNotifier(count);
             _manager.Attach(_options.Collection, notifier);
+
+            var workerPool = new WorkerPool(_options.Workers * Environment.ProcessorCount, 1, _toCollection,
+                transitChannel, notifier, _options.Upsert, dryRun, _logger);
             
             sw.Restart();
 
-            var insertionWorkersCount = _options.Workers * Environment.ProcessorCount;
-            var retryWorkersCount = 1;
-            var workers = new List<Task<(long processed, long retried, long failed)>>();
-            var retriers = new List<Task<(long processed, long retried, long failed)>>();
+            workerPool.Start(token);
             
-            for (var workerN = 0; workerN < insertionWorkersCount; workerN++)
-            {
-                workers.Add(RunWorker(notifier, transitChannel.Reader, retriesChannel.Writer,
-                    _logger.ForContext("Scope", $"{_options.Collection}-{workerN:00}"), dryRun, token));
-            }
-
-            for (var retryWorkerN = 0; retryWorkerN < retryWorkersCount; retryWorkerN++)
-            {
-                retriers.Add(RunRetryWorker(notifier, retriesChannel.Reader,
-                    _logger.ForContext("Scope", $"{_options.Collection}-Retry{retryWorkerN:00}"), dryRun, token));
-            }
-
-            _logger.Debug("Started {I} insertion worker(s) and {R} retry worker(s)", insertionWorkersCount, retryWorkersCount);
-
             _logger.Debug("Started reading documents from source");
             await ReadDocumentsAsync(fromCursor, transitChannel.Writer, token);
 
-            _logger.Debug("Finished reading documents, waiting for insertion-workers");
-            await Task.WhenAll(workers);
-            
-            _logger.Debug("Insertion-workers finished, waiting for retry-workers");
-            retriesChannel.Writer.Complete();
-            await Task.WhenAll(retriers);
+            var (processed, retried, failed) = await workerPool.StopAsync();
             
             _logger.Debug("Transfer was completed in {elapsed}", sw.Elapsed);
 
-            await LogTotalResults(workers.Concat(retriers));
-        }
-
-        private async Task LogTotalResults(IEnumerable<Task<(long processed, long retried, long failed)>> insertionWorkers)
-        {
-            var processed = 0L;
-            var retried = 0L;
-            var failed = 0L;
-
-            foreach (var worker in insertionWorkers)
-            {
-                var (s, r, f) = await worker;
-                processed += s;
-                retried += r;
-                failed += f;
-            }
-
+            
             _logger.Information("Transferred {S}; Retried {R}; Failed {F};", processed, retried, failed);
         }
 
@@ -248,136 +209,7 @@ namespace MongoTransit.Transit
             batchWriter.Complete();
         }
 
-        private async Task<(long processed, long totalRetried, long failed)> RunWorker(ProgressNotifier notifier,
-            ChannelReader<(int count, ReplaceOneModel<BsonDocument>[] batch)> batchReader,
-            ChannelWriter<ReplaceOneModel<BsonDocument>> failedWrites,
-            ILogger workerLogger,
-            bool dryRun,
-            CancellationToken token)
-        {
-            var sw = new Stopwatch();
-            
-            var totalProcessed = 0L;
-            var totalRetried = 0L;
-            var totalFailed = 0L;
-            
-            await foreach (var (count, batch) in batchReader.ReadAllAsync(token))
-            {
-                var requests = batch.Take(count).ToArray();
-                try
-                {
-                    if (!dryRun)
-                    {
-                        sw.Restart();
-                        var results = await _toCollection.BulkWriteAsync(requests, new BulkWriteOptions
-                        {
-                            IsOrdered = true,
-                            BypassDocumentValidation = true
-                        }, token);
-                        sw.Stop();
-
-                        var processedCount = GetSuccessfulOperationsCount(results);
-
-                        workerLogger.Debug("Processed {s} documents from batch of size {count} in {elapsed:N1} ms",
-                            processedCount, count, sw.ElapsedMilliseconds);
-
-                        totalProcessed += processedCount;
-                    }
-                    notifier.Notify(count);
-                    ArrayPool<WriteModel<BsonDocument>>.Shared.Return(batch);
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (MongoBulkWriteException<BsonDocument> bwe)
-                {
-                    var retries = 0;
-                    var fails = 0;
-                    foreach (var error in bwe.WriteErrors)
-                    {
-                        switch (error.Message)
-                        {
-                            case ErrorUpdateWithMoveToAnotherShard:
-                                await failedWrites.WriteAsync(requests[error.Index], token);
-                                retries++;
-                                break;
-                            default:
-                                fails++;
-                                break;
-                        }
-                    }
-                    
-                    totalFailed += fails;
-                    totalRetried += retries;
-                    totalProcessed += GetSuccessfulOperationsCount(bwe.Result);
-                    
-                    workerLogger.Error("{N} documents failed to transfer, {R} were sent to retry", fails, retries);
-                    workerLogger.Debug(bwe, "Bulk write exception details:");
-                }
-                catch (Exception e)
-                {
-                    workerLogger.Error(e, "Error occurred while transferring documents to {collection}", _options.Collection);
-                }
-            }
-
-            return (totalProcessed, totalRetried, totalFailed);
-        }
-
-        private async Task<(long processed, long totalRetried, long failed)> RunRetryWorker(ProgressNotifier notifier,
-            ChannelReader<ReplaceOneModel<BsonDocument>> failedWrites,
-            ILogger workerLogger,
-            bool dryRun,
-            CancellationToken token)
-        {
-            var sw = new Stopwatch();
-            
-            var totalProcessed = 0L;
-            var totalFailed = 0L;
-            
-            await foreach (var failedReplace in failedWrites.ReadAllAsync(token))
-            {
-                var documentId = failedReplace.Replacement["_id"].AsObjectId;
-                try
-                {
-                    if (!dryRun)
-                    {
-                        sw.Restart();
-                        await _toCollection.ReplaceOneAsync(failedReplace.Filter, failedReplace.Replacement, new ReplaceOptions
-                        {
-                            IsUpsert = _options.Upsert,
-                            BypassDocumentValidation = true
-                        }, token);
-                        sw.Stop();
-                        
-                        workerLogger.Debug("Successfully retried replacement of document (ID: {id}) in {elapsed:N1} ms", documentId, sw.ElapsedMilliseconds);
-
-                        totalProcessed++;
-                    }
-                    notifier.Notify(1);
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (MongoWriteException we)
-                {
-                    workerLogger.Error("Failed to retry replacement (ID: {id}): {msg}", documentId, we.Message);
-                    workerLogger.Debug(we, "Retry exception details:");
-                    totalFailed++;
-                }
-                catch (Exception e)
-                {
-                    workerLogger.Error(e, "Error occurred while transferring documents to {collection}", _options.Collection);
-                }
-            }
-            
-            return (totalProcessed, 0, totalFailed);
-        }
-
-        private static long GetSuccessfulOperationsCount(BulkWriteResult results) =>
-            results.MatchedCount + results.Upserts.Count;
-
+        
         private static async Task<DateTime?> FindCheckpointAsync(IMongoCollection<BsonDocument> collection, string checkpointField, CancellationToken token)
         {
             var checkpointBson = await (await collection.FindAsync(new BsonDocument
