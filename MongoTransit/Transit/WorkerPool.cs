@@ -65,7 +65,7 @@ namespace MongoTransit.Transit
                     _logger.ForContext("Scope", $"{_collectionName}-Retry{retryWorkerN:00}"), token);
             }
 
-            _logger.Debug("Started {I} insertion worker(s) and {R} retry worker(s)", _insertionWorkers.Length, _retryWorkers.Length);
+            _logger.Debug("Started {I:N0} insertion worker(s) and {R:0} retry worker(s)", _insertionWorkers.Length, _retryWorkers.Length);
         }
 
         public async Task<(long processed, long retried, long failed)> StopAsync()
@@ -107,13 +107,13 @@ namespace MongoTransit.Transit
 
                         var processedCount = GetSuccessfulOperationsCount(results);
 
-                        workerLogger.Debug("Processed {s} documents from batch of size {count} in {elapsed:N1} ms",
+                        workerLogger.Debug("Processed {s:N0} documents from batch of size {count:N0} in {elapsed:N1} ms",
                             processedCount, count, sw.ElapsedMilliseconds);
 
                         totalProcessed += processedCount;
                     }
+
                     _notifier.Notify(count);
-                    ArrayPool<WriteModel<BsonDocument>>.Shared.Return(batch);
                 }
                 catch (OperationCanceledException)
                 {
@@ -136,17 +136,22 @@ namespace MongoTransit.Transit
                                 break;
                         }
                     }
-                    
+
                     totalFailed += fails;
                     totalRetried += retries;
                     totalProcessed += GetSuccessfulOperationsCount(bwe.Result);
-                    
-                    workerLogger.Error("{N} documents failed to transfer, {R} were sent to retry", fails, retries);
+
+                    workerLogger.Error("{N:N0} documents failed to transfer, {R:N0} were sent to retry. Total batch: {B:N0}",
+                        fails, retries, count);
                     workerLogger.Debug(bwe, "Bulk write exception details:");
                 }
                 catch (Exception e)
                 {
                     workerLogger.Error(e, "Error occurred while transferring documents");
+                }
+                finally
+                {
+                    ArrayPool<ReplaceOneModel<BsonDocument>>.Shared.Return(batch);
                 }
             } 
             
