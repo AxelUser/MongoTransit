@@ -183,9 +183,10 @@ namespace MongoTransit.Transit
                 if (count < batchSize)
                 {
                     var filter = new BsonDocument();
-                    if (upsertFields?.Any() == true)
+                    var hasUpsert = upsertFields?.Any() == true;
+                    if (hasUpsert)
                     {
-                        foreach (var field in upsertFields)
+                        foreach (var field in upsertFields!)
                         {
                             filter[field] = document[field];
                         }   
@@ -197,7 +198,7 @@ namespace MongoTransit.Transit
 
                     batch[count] = new ReplaceOneModel<BsonDocument>(filter, document)
                     {
-                        IsUpsert = true
+                        IsUpsert = hasUpsert
                     };
                     count++;
                 }
