@@ -92,13 +92,12 @@ namespace MongoTransit.Transit
             
             await foreach (var (count, batch) in _batchReader.ReadAllAsync(token))
             {
-                var requests = batch.Take(count).ToArray();
                 try
                 {
                     if (!_dryRun)
                     {
                         sw.Restart();
-                        var results = await _collection.BulkWriteAsync(requests, new BulkWriteOptions
+                        var results = await _collection.BulkWriteAsync(batch.Take(count), new BulkWriteOptions
                         {
                             IsOrdered = false,
                             BypassDocumentValidation = true
@@ -123,12 +122,14 @@ namespace MongoTransit.Transit
                 {
                     var retries = 0;
                     var fails = 0;
+                    
                     foreach (var error in bwe.WriteErrors)
                     {
                         switch (error.Message)
                         {
                             case ErrorUpdateWithMoveToAnotherShard:
-                                await failedWrites.WriteAsync(requests[error.Index], token);
+                                await failedWrites.WriteAsync(
+                                    (ReplaceOneModel<BsonDocument>) bwe.Result.ProcessedRequests[error.Index], token);
                                 retries++;
                                 break;
                             default:
@@ -180,7 +181,6 @@ namespace MongoTransit.Transit
                         sw.Restart();
                         await _collection.ReplaceOneAsync(failedReplace.Filter, failedReplace.Replacement, new ReplaceOptions
                         {
-                            IsUpsert = _upsert,
                             BypassDocumentValidation = true
                         }, token);
                         sw.Stop();
