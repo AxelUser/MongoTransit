@@ -100,7 +100,7 @@ namespace MongoTransit.Transit
                         sw.Restart();
                         var results = await _collection.BulkWriteAsync(requests, new BulkWriteOptions
                         {
-                            IsOrdered = true,
+                            IsOrdered = false,
                             BypassDocumentValidation = true
                         }, token);
                         sw.Stop();
