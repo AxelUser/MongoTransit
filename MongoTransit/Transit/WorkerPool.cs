@@ -104,12 +104,10 @@ namespace MongoTransit.Transit
                         }, token);
                         sw.Stop();
 
-                        var processedCount = GetSuccessfulOperationsCount(results);
+                        workerLogger.Debug("Processed bulk of {count:N0} documents in {elapsed:N1} ms",
+                            count, sw.ElapsedMilliseconds);
 
-                        workerLogger.Debug("Processed {s:N0} documents from batch of size {count:N0} in {elapsed:N1} ms",
-                            processedCount, count, sw.ElapsedMilliseconds);
-
-                        totalProcessed += processedCount;
+                        totalProcessed += count;
                     }
 
                     _notifier.Notify(count);
@@ -140,7 +138,7 @@ namespace MongoTransit.Transit
 
                     totalFailed += fails;
                     totalRetried += retries;
-                    totalProcessed += GetSuccessfulOperationsCount(bwe.Result);
+                    totalProcessed += bwe.Result.ProcessedRequests.Count - fails - retries;
 
                     workerLogger.Error("{N:N0} documents failed to transfer, {R:N0} were sent to retry. Total batch: {B:N0}",
                         fails, retries, count);
@@ -158,9 +156,6 @@ namespace MongoTransit.Transit
             
             return (totalProcessed, totalRetried, totalFailed);
         }
-
-        private static long GetSuccessfulOperationsCount(BulkWriteResult results) =>
-            results.MatchedCount + results.Upserts.Count;
 
         private async Task<(long processed, long totalRetried, long failed)> RunRetryWorker(ChannelReader<ReplaceOneModel<BsonDocument>> failedWrites,
             ILogger workerLogger,
@@ -204,6 +199,7 @@ namespace MongoTransit.Transit
                 catch (Exception e)
                 {
                     workerLogger.Error(e, "Error occurred while transferring documents to {collection}", _collectionName);
+                    totalFailed++;
                 }
             }
             
