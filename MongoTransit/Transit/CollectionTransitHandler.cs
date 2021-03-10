@@ -82,8 +82,9 @@ namespace MongoTransit.Transit
             var notifier = new ProgressNotifier(count);
             _manager.Attach(_options.Collection, notifier);
 
-            var workerPool = new WorkerPool(_options.Workers * Environment.ProcessorCount, 1, _toCollection,
-                transitChannel, notifier, _options.Upsert, dryRun, _logger);
+            var workerPool = new WorkerPool(_options.Workers * Environment.ProcessorCount,
+                _options.Workers * Environment.ProcessorCount,
+                _toCollection, transitChannel, notifier, _options.Upsert, dryRun, _logger);
             
             sw.Restart();
 
