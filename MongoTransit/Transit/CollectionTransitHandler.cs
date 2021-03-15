@@ -161,39 +161,13 @@ namespace MongoTransit.Transit
             var count = 0;
             await documentsReader.ForEachAsync(async document =>
             {
-                if (count < _options.BatchSize)
-                {
-                    var fields = document;
-                    if (_options.FetchKeyFromDestination)
-                    {
-                        // TODO maybe defer and put it in batch
-                        var foundDestinationDoc = await (await _toCollection.FindAsync(new BsonDocument("_id", document["_id"]),
-                            cancellationToken: token)).SingleOrDefaultAsync(token);
-                        if (foundDestinationDoc != null)
-                        {
-                            fields = foundDestinationDoc;
-                        }
-                    }
-                    var filter = new BsonDocument();
-                    if (_options.KeyFields?.Any() == true)
-                    {
-                        foreach (var field in _options.KeyFields)
-                        {
-                            filter[field] = fields[field];
-                        }   
-                    }
-                    else
-                    {
-                        filter["_id"] = fields["_id"];
-                    }
+                count++;
+                
+                var model = await CreateReplaceModelAsync(document);
+                batch[count - 1] = model;
 
-                    batch[count] = new ReplaceOneModel<BsonDocument>(filter, document)
-                    {
-                        IsUpsert = _options.Upsert
-                    };
-                    count++;
-                }
-                else
+                
+                if (count == _options.BatchSize)
                 {
                     await batchWriter.WriteAsync((count, batch), token);
                     count = 0;
@@ -208,6 +182,40 @@ namespace MongoTransit.Transit
                 await batchWriter.WriteAsync((count, batch), token);
             }
             batchWriter.Complete();
+
+            async Task<ReplaceOneModel<BsonDocument>> CreateReplaceModelAsync(BsonDocument document)
+            {
+                var fields = document;
+                if (_options.FetchKeyFromDestination)
+                {
+                    // TODO maybe defer and put it in batch
+                    var foundDestinationDoc = await (await _toCollection.FindAsync(new BsonDocument("_id", document["_id"]),
+                        cancellationToken: token)).SingleOrDefaultAsync(token);
+                    if (foundDestinationDoc != null)
+                    {
+                        fields = foundDestinationDoc;
+                    }
+                }
+
+                var filter = new BsonDocument();
+                if (_options.KeyFields?.Any() == true)
+                {
+                    foreach (var field in _options.KeyFields)
+                    {
+                        filter[field] = fields[field];
+                    }
+                }
+                else
+                {
+                    filter["_id"] = fields["_id"];
+                }
+
+                var model = new ReplaceOneModel<BsonDocument>(filter, document)
+                {
+                    IsUpsert = _options.Upsert
+                };
+                return model;
+            }
         }
 
         
