@@ -1,5 +1,5 @@
 using System;
-using System.Buffers;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -60,7 +60,7 @@ namespace MongoTransit.Transit
         private async Task InternalTransit(bool dryRun, TextStatusProvider progress, CancellationToken token)
         {
             var sw = new Stopwatch();
-            var transitChannel = Channel.CreateBounded<(int count, ReplaceOneModel<BsonDocument>[] batch)>(_options.Workers);
+            var transitChannel = Channel.CreateBounded<List<ReplaceOneModel<BsonDocument>>>(_options.Workers);
 
             var (filter, count) = await CheckCollectionAsync(progress, token);
             sw.Stop();
@@ -71,13 +71,6 @@ namespace MongoTransit.Transit
                 _logger.Information("Collection {Collection} is up-to date, skipping transit", _options.Collection);
                 return;
             }
-
-            _logger.Debug("Creating cursor to source");
-            IAsyncCursor<BsonDocument> fromCursor = await _fromCollection.FindAsync(
-                filter, new FindOptions<BsonDocument>
-                {
-                    BatchSize = _options.BatchSize
-                }, token);
 
             var notifier = new ProgressNotifier(count);
             _manager.Attach(_options.Collection, notifier);
@@ -90,8 +83,18 @@ namespace MongoTransit.Transit
 
             workerPool.Start(token);
             
-            _logger.Debug("Started reading documents from source");
-            await ReadDocumentsAsync(fromCursor, transitChannel.Writer, token);
+            _logger.Debug("Creating a cursor to the source with batch size {batch}", _options.BatchSize);
+            using (var sourceCursor = await _fromCollection.FindAsync(
+                filter, new FindOptions<BsonDocument>
+                {
+                    BatchSize = _options.BatchSize
+                }, token))
+            {
+                _logger.Debug("Started reading documents from source");
+                await ReadDocumentsAsync(sourceCursor, transitChannel.Writer, token);
+            }
+
+
 
             var (processed, retried, failed) = await workerPool.StopAsync();
             
@@ -154,35 +157,28 @@ namespace MongoTransit.Transit
             return (filter, count);
         }
 
-        private async Task ReadDocumentsAsync(IAsyncCursor<BsonDocument> documentsReader,
-            ChannelWriter<(int count, ReplaceOneModel<BsonDocument>[] batch)> batchWriter, CancellationToken token)
+        private async Task ReadDocumentsAsync(IAsyncCursor<BsonDocument> cursor,
+            ChannelWriter<List<ReplaceOneModel<BsonDocument>>> batchWriter, CancellationToken token)
         {
-            var batch = ArrayPool<ReplaceOneModel<BsonDocument>>.Shared.Rent(_options.BatchSize);
-            var count = 0;
-            await documentsReader.ForEachAsync(async document =>
-            {
-                count++;
-                
-                var model = await CreateReplaceModelAsync(document);
-                batch[count - 1] = model;
 
-                
-                if (count == _options.BatchSize)
+            try
+            {
+                while (await cursor.MoveNextAsync(token))
                 {
-                    await batchWriter.WriteAsync((count, batch), token);
-                    count = 0;
-                    batch = ArrayPool<ReplaceOneModel<BsonDocument>>.Shared.Rent(_options.BatchSize);
+                    var replaceModels = new List<ReplaceOneModel<BsonDocument>>();
+                    foreach (var document in cursor.Current)
+                    {
+                        replaceModels.Add(await CreateReplaceModelAsync(document));
+                    }
+
+                    await batchWriter.WriteAsync(replaceModels, token);
                 }
-            }, token);
-
-            // Handle case when cursor is finished, but there are some documents less than batch.
-            if (count > 0)
-            {
-                // Flush remaining documents
-                await batchWriter.WriteAsync((count, batch), token);
             }
-            batchWriter.Complete();
-
+            finally
+            {
+                batchWriter.Complete();
+            }
+            
             async Task<ReplaceOneModel<BsonDocument>> CreateReplaceModelAsync(BsonDocument document)
             {
                 var fields = document;

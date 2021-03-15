@@ -16,7 +16,7 @@ namespace MongoTransit.Transit
     public class WorkerPool
     {
         private readonly IMongoCollection<BsonDocument> _collection;
-        private readonly ChannelReader<(int count, ReplaceOneModel<BsonDocument>[] batch)> _batchReader;
+        private readonly ChannelReader<List<ReplaceOneModel<BsonDocument>>> _batchReader;
         private readonly ProgressNotifier _notifier;
         private readonly bool _upsert;
         private readonly bool _dryRun;
@@ -32,7 +32,7 @@ namespace MongoTransit.Transit
         public WorkerPool(int insertionWorkersCount,
             int retryWorkersCount,
             IMongoCollection<BsonDocument> collection,
-            ChannelReader<(int count, ReplaceOneModel<BsonDocument>[] batch)> batchReader,
+            ChannelReader<List<ReplaceOneModel<BsonDocument>>> batchReader,
             ProgressNotifier notifier,
             bool upsert,
             bool dryRun,
@@ -90,14 +90,14 @@ namespace MongoTransit.Transit
             var totalRetried = 0L;
             var totalFailed = 0L;
             
-            await foreach (var (count, batch) in _batchReader.ReadAllAsync(token))
+            await foreach (var batch in _batchReader.ReadAllAsync(token))
             {
                 try
                 {
                     if (!_dryRun)
                     {
                         sw.Restart();
-                        var results = await _collection.BulkWriteAsync(batch.Take(count), new BulkWriteOptions
+                        var results = await _collection.BulkWriteAsync(batch, new BulkWriteOptions
                         {
                             IsOrdered = false,
                             BypassDocumentValidation = true
@@ -105,12 +105,12 @@ namespace MongoTransit.Transit
                         sw.Stop();
 
                         workerLogger.Debug("Processed bulk of {count:N0} documents in {elapsed:N1} ms",
-                            count, sw.ElapsedMilliseconds);
+                            batch.Count, sw.ElapsedMilliseconds);
 
-                        totalProcessed += count;
+                        totalProcessed += batch.Count;
                     }
 
-                    _notifier.Notify(count);
+                    _notifier.Notify(batch.Count);
                 }
                 catch (OperationCanceledException)
                 {
@@ -141,16 +141,12 @@ namespace MongoTransit.Transit
                     totalProcessed += bwe.Result.ProcessedRequests.Count - fails - retries;
 
                     workerLogger.Error("{N:N0} documents failed to transfer, {R:N0} were sent to retry. Total batch: {B:N0}",
-                        fails, retries, count);
+                        fails, retries, batch.Count);
                     workerLogger.Debug(bwe, "Bulk write exception details:");
                 }
                 catch (Exception e)
                 {
                     workerLogger.Error(e, "Error occurred while transferring documents");
-                }
-                finally
-                {
-                    ArrayPool<ReplaceOneModel<BsonDocument>>.Shared.Return(batch);
                 }
             } 
             
