@@ -122,7 +122,7 @@ namespace MongoTransit.Transit
         {
             _logger.Debug("Detected iterative transit option. Fetching checkpoint and lag");
 
-            var (checkpointField, forcedCheckpoint) = iterOpts;
+            var (checkpointField, offset, forcedCheckpoint) = iterOpts;
 
             progress.Status = "Searching checkpoint...";
 
@@ -138,6 +138,7 @@ namespace MongoTransit.Transit
             {
                 _logger.Debug("Fetching last checkpoint for collection {Collection}", _options.Collection);
                 lastCheckpoint = await FindCheckpointAsync(_toCollection, checkpointField, token);
+                lastCheckpoint -= offset;
             }
             
             if (lastCheckpoint == null)
@@ -230,7 +231,7 @@ namespace MongoTransit.Transit
                 Limit = 1,
                 Projection = new BsonDocument
                 {
-                    ["_id"] = false,
+                    ["_id"] = true,
                     [checkpointField] = true
                 }
             }, token)).SingleOrDefaultAsync(token);

@@ -28,6 +28,8 @@ namespace MongoTransit
             public string Field { get; set; }
 
             public DateTime? ForcedCheckpoint { get; set; }
+            
+            public int OffsetInMinutes { get; set; }
         }
 
         public static IEnumerable<CollectionOption> Read(string file)

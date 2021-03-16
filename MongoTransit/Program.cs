@@ -48,7 +48,9 @@ namespace MongoTransit
             foreach (var coll in config)
             {
                 var iterOpts = coll.IterativeOptions != null
-                    ? new IterativeTransitOptions(coll.IterativeOptions.Field, coll.IterativeOptions.ForcedCheckpoint)
+                    ? new IterativeTransitOptions(coll.IterativeOptions.Field,
+                        TimeSpan.FromMinutes(coll.IterativeOptions.OffsetInMinutes),
+                        coll.IterativeOptions.ForcedCheckpoint)
                     : null;
 
                 yield return new CollectionTransitOptions(toolOptions.SourceConnectionString,
