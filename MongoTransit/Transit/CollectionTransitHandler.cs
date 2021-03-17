@@ -62,7 +62,7 @@ namespace MongoTransit.Transit
             var sw = new Stopwatch();
             var transitChannel = Channel.CreateBounded<List<ReplaceOneModel<BsonDocument>>>(_options.Workers);
 
-            var (filter, count) = await CheckCollectionAsync(progress, token);
+            var (filter, count) = await PrepareCollectionAsync(progress, token);
             sw.Stop();
             _logger.Debug("Collection check was completed in {elapsed} ms", sw.ElapsedMilliseconds);
 
@@ -104,15 +104,17 @@ namespace MongoTransit.Transit
             _logger.Information("Transferred {S}; Retried {R}; Failed {F};", processed, retried, failed);
         }
 
-        private async Task<(BsonDocument filter, long count)> CheckCollectionAsync(TextStatusProvider progress,
+        private async Task<(BsonDocument filter, long count)> PrepareCollectionAsync(TextStatusProvider progress,
             CancellationToken token)
         {
             if (_options.IterativeTransferOptions != null)
             {
                 return await CheckIterativeCollectionAsync(progress, _options.IterativeTransferOptions, token);
             }
-
+            
             var filter = new BsonDocument();
+            progress.Status = "Removing documents from destination...";
+            await _toCollection.DeleteManyAsync(filter, token);
             progress.Status = "Counting documents...";
             var count = await _fromCollection.CountDocumentsAsync(filter, cancellationToken: token);
             return (filter, count);
@@ -248,7 +250,7 @@ namespace MongoTransit.Transit
         {
             var filter = new BsonDocument
             {
-                [field] = new BsonDocument("$gt", checkpoint)
+                [field] = new BsonDocument("$gte", checkpoint)
             };
 
             return await _fromCollection.CountDocumentsAsync(filter, cancellationToken: token);
