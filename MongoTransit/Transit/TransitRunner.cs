@@ -98,7 +98,7 @@ namespace MongoTransit.Transit
                         await Task.Delay(delay, cts.Token);
                         if (manager.Available)
                         {
-                            logger.Information("Progress report:\n{Progress}", manager.ToString());    
+                            logger.Information("Progress report:\n{Progress}", manager.GetStatus());    
                         }
                     }
                 }

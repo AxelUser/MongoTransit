@@ -5,7 +5,7 @@ using System.Threading;
 
 namespace MongoTransit.Progress
 {
-    public class ProgressManager
+    public class ProgressManager : IProgressManager
     {
         private readonly ConcurrentDictionary<string, IOperationStatusProvider> _providers;
         private int _maxNameLength;
@@ -36,7 +36,7 @@ namespace MongoTransit.Progress
 
         public bool Available => _providers.Any();
 
-        public override string ToString()
+        public string GetStatus()
         {
             var sb = new StringBuilder();
             foreach (var (name, notifier) in _providers)

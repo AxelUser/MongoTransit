@@ -17,7 +17,7 @@ namespace MongoTransit.Transit
 {
     public class CollectionTransitHandler
     {
-        private readonly ProgressManager _manager;
+        private readonly IProgressManager _manager;
         private readonly ILogger _logger;
         private readonly CollectionTransitOptions _options;
         private readonly ICollectionPreparationHandler _preparationHandler;
@@ -29,7 +29,7 @@ namespace MongoTransit.Transit
             IDestinationRepositoryFactory destinationRepositoryFactory,
             ICollectionPreparationHandler preparationHandler,
             IWorkerPoolFactory workerPoolFactory,
-            ProgressManager manager,
+            IProgressManager manager,
             ILogger logger,
             CollectionTransitOptions options)
         {
