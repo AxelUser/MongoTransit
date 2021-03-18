@@ -6,6 +6,7 @@ using MongoTransit.Options;
 using MongoTransit.Progress;
 using MongoTransit.Storage.Destination;
 using MongoTransit.Storage.Source;
+using MongoTransit.Workers;
 using Serilog;
 
 namespace MongoTransit.Transit
@@ -70,9 +71,13 @@ namespace MongoTransit.Transit
             var preparationHandler = new CollectionPreparationHandler(currentOptions.Collection,
                 destFactory.Create(logger), sourceFactory.Create(logger), logger);
 
+            var workersCount = currentOptions.Workers * Environment.ProcessorCount;
+            var workerPoolFactory = new WorkerPoolFactory(workersCount, workersCount, currentOptions.Collection,
+                destFactory, logger);
+            
             // ReSharper disable once ConstantNullCoalescingCondition
             var handler = new CollectionTransitHandler(sourceFactory, destFactory, preparationHandler,
-                progressNotification.Manager,
+                workerPoolFactory, progressNotification.Manager,
                 collectionLogger, currentOptions);
             return handler;
         }

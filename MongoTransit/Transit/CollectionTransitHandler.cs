@@ -22,12 +22,14 @@ namespace MongoTransit.Transit
         private readonly CollectionTransitOptions _options;
         private readonly IDestinationRepositoryFactory _destinationFactory;
         private readonly ICollectionPreparationHandler _preparationHandler;
+        private readonly IWorkerPoolFactory _workerPoolFactory;
         private readonly IDestinationRepository _destination;
         private readonly ISourceRepository _source;
 
         public CollectionTransitHandler(ISourceRepositoryFactory sourceRepositoryFactory,
             IDestinationRepositoryFactory destinationRepositoryFactory,
             ICollectionPreparationHandler preparationHandler,
+            IWorkerPoolFactory workerPoolFactory,
             ProgressManager manager,
             ILogger logger,
             CollectionTransitOptions options)
@@ -41,6 +43,7 @@ namespace MongoTransit.Transit
             _source = sourceRepositoryFactory.Create(_logger);
             
             _preparationHandler = preparationHandler;
+            _workerPoolFactory = workerPoolFactory;
         }
         
         public async Task TransitAsync(bool dryRun, CancellationToken token)
@@ -81,10 +84,8 @@ namespace MongoTransit.Transit
             var notifier = new ProgressNotifier(count);
             _manager.Attach(_options.Collection, notifier);
 
-            var workerPool = new WorkerPool(_options.Workers * Environment.ProcessorCount,
-                _options.Workers * Environment.ProcessorCount, _options.Collection,
-                _destinationFactory, transitChannel, notifier, _options.Upsert, dryRun, _logger);
-            
+            var workerPool = _workerPoolFactory.Create(transitChannel, notifier, _options.Upsert, dryRun);
+
             sw.Restart();
 
             workerPool.Start(token);
