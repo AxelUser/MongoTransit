@@ -1,7 +1,7 @@
 ﻿using System.Threading;
 using System.Threading.Tasks;
 
-namespace MongoTransit.Transit
+namespace MongoTransit.Workers
 {
     public interface IWorkerPool
     {

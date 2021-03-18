@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
-namespace MongoTransit.Storage
+namespace MongoTransit.Storage.Source
 {
     public interface ISourceRepository
     {

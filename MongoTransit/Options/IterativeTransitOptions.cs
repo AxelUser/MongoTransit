@@ -1,6 +1,6 @@
 using System;
 
-namespace MongoTransit.Transit
+namespace MongoTransit.Options
 {
     public record IterativeTransitOptions(string Field, TimeSpan Offset, DateTime? ForcedCheckpoint);
 }

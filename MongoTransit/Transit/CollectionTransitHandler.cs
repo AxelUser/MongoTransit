@@ -6,8 +6,11 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using MongoTransit.Options;
 using MongoTransit.Progress;
-using MongoTransit.Storage;
+using MongoTransit.Storage.Destination;
+using MongoTransit.Storage.Source;
+using MongoTransit.Workers;
 using Serilog;
 
 namespace MongoTransit.Transit
@@ -17,21 +20,23 @@ namespace MongoTransit.Transit
         private readonly ProgressManager _manager;
         private readonly ILogger _logger;
         private readonly CollectionTransitOptions _options;
-        private readonly DestinationRepositoryFactory _destinationFactory;
+        private readonly IDestinationRepositoryFactory _destinationFactory;
         private readonly IDestinationRepository _destination;
         private readonly ISourceRepository _source;
 
-        public CollectionTransitHandler(ProgressManager manager, ILogger logger, CollectionTransitOptions options)
+        public CollectionTransitHandler(ISourceRepositoryFactory sourceRepositoryFactory,
+            IDestinationRepositoryFactory destinationRepositoryFactory,
+            ProgressManager manager,
+            ILogger logger,
+            CollectionTransitOptions options)
         {
             _manager = manager;
             _logger = logger;
             _options = options;
 
-            _destinationFactory = new DestinationRepositoryFactory(options.DestinationConnectionString,
-                options.Database, options.Collection);
+            _destinationFactory = destinationRepositoryFactory;
             _destination = _destinationFactory.Create(_logger);
-            _source = new SourceRepository(options.SourceConnectionString, options.Database, options.Collection,
-                logger);
+            _source = sourceRepositoryFactory.Create(_logger);
         }
         
         public async Task TransitAsync(bool dryRun, CancellationToken token)

@@ -8,19 +8,16 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using Serilog;
 
-namespace MongoTransit.Storage
+namespace MongoTransit.Storage.Source
 {
     public class SourceRepository : ISourceRepository
     {
         private readonly IMongoCollection<BsonDocument> _collection;
         private readonly ILogger _logger;
 
-        public SourceRepository(string connectionString, string database, string collectionName, ILogger logger)
+        public SourceRepository(IMongoCollection<BsonDocument> collection, ILogger logger)
         {
-            // TODO check DB for existence
-            // TODO check collection for existence
-            _collection = new MongoClient(connectionString).GetDatabase(database)
-                .GetCollection<BsonDocument>(collectionName);
+            _collection = collection;
             _logger = logger;
         }
 

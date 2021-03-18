@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
-namespace MongoTransit.Storage
+namespace MongoTransit.Storage.Destination
 {
     public interface IDestinationRepository: IDocumentFinder
     {

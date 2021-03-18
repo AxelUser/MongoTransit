@@ -2,7 +2,7 @@
 using MongoDB.Driver;
 using Serilog;
 
-namespace MongoTransit.Storage
+namespace MongoTransit.Storage.Destination
 {
     public class DestinationRepositoryFactory : IDestinationRepositoryFactory
     {
@@ -17,9 +17,13 @@ namespace MongoTransit.Storage
             _collectionName = collectionName;
         }
 
-        public DestinationRepository Create(ILogger logger)
+        public IDestinationRepository Create(ILogger logger)
         {
-            return new DestinationRepository(_connectionString, _database, _collectionName, logger);
+            // TODO check DB for existence
+            // TODO check collection for existence
+            var collection = new MongoClient(_connectionString).GetDatabase(_database)
+                .GetCollection<BsonDocument>(_collectionName);
+            return new DestinationRepository(collection, logger);
         }
     }
 }

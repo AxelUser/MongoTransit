@@ -2,7 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using MongoTransit.Options;
 using MongoTransit.Progress;
+using MongoTransit.Storage.Destination;
+using MongoTransit.Storage.Source;
 using Serilog;
 
 namespace MongoTransit.Transit
@@ -22,17 +25,23 @@ namespace MongoTransit.Transit
                 {
                     token.ThrowIfCancellationRequested();
                 
-                    logger.Information("Transition iteration #{number}", cycle);
+                    logger.Information("Transition iteration #{Number}", cycle);
                 
                     for (var idx = 0; idx < options.Length; idx++)
                     {
-                        // ReSharper disable once ConstantNullCoalescingCondition
-                        handlers[idx] ??= new CollectionTransitHandler(progressNotification.Manager,
-                            logger.ForContext("Scope", options[idx].Collection), options[idx]);
-
-                        var currentHandler = handlers[idx];
                         var currentOptions = options[idx];
                         
+                        var sourceFactory = new SourceRepositoryFactory(currentOptions.SourceConnectionString,
+                            currentOptions.Database, currentOptions.Collection);
+                        var destFactory = new DestinationRepositoryFactory(currentOptions.DestinationConnectionString,
+                            currentOptions.Database, currentOptions.Collection);
+                        
+                        // ReSharper disable once ConstantNullCoalescingCondition
+                        handlers[idx] ??= new CollectionTransitHandler(sourceFactory, destFactory, progressNotification.Manager,
+                            logger.ForContext("Scope", currentOptions.Collection), currentOptions);
+
+                        var currentHandler = handlers[idx];
+
                         operations[idx] = Task.Run(async () =>
                         {
                             try
@@ -41,13 +50,13 @@ namespace MongoTransit.Transit
                             }
                             catch (Exception e)
                             {
-                                logger.Error(e, "Failed to transit collection {collection}", currentOptions.Collection);
+                                logger.Error(e, "Failed to transit collection {Collection}", currentOptions.Collection);
                                 throw;
                             }
                         }, token);
                     }
              
-                    logger.Information("Started {n} parallel transit operations", operations.Length);
+                    logger.Information("Started {N} parallel transit operations", operations.Length);
                     await Task.WhenAll(operations);
                 }
             }
@@ -73,7 +82,7 @@ namespace MongoTransit.Transit
                         await Task.Delay(delay, cts.Token);
                         if (manager.Available)
                         {
-                            logger.Information("Progress report:\n{progress}", manager.ToString());    
+                            logger.Information("Progress report:\n{Progress}", manager.ToString());    
                         }
                     }
                 }

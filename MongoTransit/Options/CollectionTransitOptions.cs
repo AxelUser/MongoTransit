@@ -1,4 +1,4 @@
-namespace MongoTransit.Transit
+namespace MongoTransit.Options
 {
     public record CollectionTransitOptions(string SourceConnectionString, string DestinationConnectionString,
         string Database, string Collection,

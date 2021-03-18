@@ -8,10 +8,10 @@ using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoTransit.Progress;
-using MongoTransit.Storage;
+using MongoTransit.Storage.Destination;
 using Serilog;
 
-namespace MongoTransit.Transit
+namespace MongoTransit.Workers
 {
     public class WorkerPool : IWorkerPool
     {
@@ -83,7 +83,7 @@ namespace MongoTransit.Transit
             return await GetResultsAsync();
         }
         
-        private async Task<(long processed, long totalRetried, long failed)> RunWorker(DestinationRepository repository,
+        private async Task<(long processed, long totalRetried, long failed)> RunWorker(IDestinationRepository repository,
             ChannelWriter<ReplaceOneModel<BsonDocument>> failedWrites,
             ILogger workerLogger,
             CancellationToken token)
@@ -147,7 +147,7 @@ namespace MongoTransit.Transit
             return (totalProcessed, totalRetried, totalFailed);
         }
 
-        private async Task<(long processed, long totalRetried, long failed)> RunRetryWorker(DestinationRepository repository,
+        private async Task<(long processed, long totalRetried, long failed)> RunRetryWorker(IDestinationRepository repository,
             ChannelReader<ReplaceOneModel<BsonDocument>> failedWrites,
             ILogger workerLogger,
             CancellationToken token)
