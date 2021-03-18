@@ -7,6 +7,7 @@ using MongoTransit.Progress;
 using MongoTransit.Storage.Destination;
 using MongoTransit.Storage.Source;
 using Serilog;
+using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace MongoTransit.Transit
 {
@@ -25,25 +26,31 @@ namespace MongoTransit.Transit
             _logger = logger;
         }
         
-        public async Task<(BsonDocument filter, long count)> PrepareCollectionAsync(
+        public async Task<CollectionPrepareResult> PrepareCollectionAsync(
             IterativeTransitOptions? iterativeTransitOptions,
             TextStatusProvider progress,
             CancellationToken token)
         {
-            if (iterativeTransitOptions != null)
-            {
-                return await CheckIterativeCollectionAsync(progress, iterativeTransitOptions, token);
-            }
-            
-            var filter = new BsonDocument();
+            var sw = new Stopwatch();
+            sw.Start();
+            var result = iterativeTransitOptions != null
+                ? await CheckIterativeCollectionAsync(progress, iterativeTransitOptions, token)
+                : await CheckFullCollectionTransitAsync(progress, token);
+            sw.Stop();
+            _logger.Debug("Collection check was completed in {Elapsed} ms", sw.ElapsedMilliseconds);
+            return result;
+        }
+
+        private async Task<CollectionPrepareResult> CheckFullCollectionTransitAsync(TextStatusProvider progress, CancellationToken token)
+        {
             progress.Status = "Removing documents from destination...";
             await _destination.DeleteAllDocumentsAsync(token);
             progress.Status = "Counting documents...";
             var count = await _source.CountAllDocumentsAsync(token);
-            return (filter, count);
+            return new CollectionPrepareResult(new BsonDocument(), count);
         }
-        
-        private async Task<(BsonDocument filter, long count)> CheckIterativeCollectionAsync(TextStatusProvider progress, IterativeTransitOptions iterOpts, CancellationToken token)
+
+        private async Task<CollectionPrepareResult> CheckIterativeCollectionAsync(TextStatusProvider progress, IterativeTransitOptions iterOpts, CancellationToken token)
         {
             _logger.Debug("Detected iterative transit option. Fetching checkpoint and lag");
 
@@ -80,7 +87,7 @@ namespace MongoTransit.Transit
             
             var filter = new BsonDocument(checkpointField, new BsonDocument("$gte", lastCheckpoint));
 
-            return (filter, count);
+            return new CollectionPrepareResult(filter, count);
         }
     }
 }

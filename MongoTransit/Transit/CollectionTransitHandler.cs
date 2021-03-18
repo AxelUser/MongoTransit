@@ -20,7 +20,6 @@ namespace MongoTransit.Transit
         private readonly ProgressManager _manager;
         private readonly ILogger _logger;
         private readonly CollectionTransitOptions _options;
-        private readonly IDestinationRepositoryFactory _destinationFactory;
         private readonly ICollectionPreparationHandler _preparationHandler;
         private readonly IWorkerPoolFactory _workerPoolFactory;
         private readonly IDestinationRepository _destination;
@@ -38,8 +37,7 @@ namespace MongoTransit.Transit
             _logger = logger;
             _options = options;
 
-            _destinationFactory = destinationRepositoryFactory;
-            _destination = _destinationFactory.Create(_logger);
+            _destination = destinationRepositoryFactory.Create(_logger);
             _source = sourceRepositoryFactory.Create(_logger);
             
             _preparationHandler = preparationHandler;
@@ -69,12 +67,12 @@ namespace MongoTransit.Transit
         private async Task InternalTransit(bool dryRun, TextStatusProvider progress, CancellationToken token)
         {
             var sw = new Stopwatch();
+            sw.Start();
+            
             var transitChannel = Channel.CreateBounded<List<ReplaceOneModel<BsonDocument>>>(_options.Workers);
 
             var (filter, count) = await _preparationHandler.PrepareCollectionAsync(_options.IterativeTransferOptions, progress, token);
-            sw.Stop();
-            _logger.Debug("Collection check was completed in {Elapsed} ms", sw.ElapsedMilliseconds);
-
+            
             if (count == 0)
             {
                 _logger.Information("Collection {Collection} is up-to date, skipping transit", _options.Collection);
@@ -86,8 +84,6 @@ namespace MongoTransit.Transit
 
             var workerPool = _workerPoolFactory.Create(transitChannel, notifier, _options.Upsert, dryRun);
 
-            sw.Restart();
-
             workerPool.Start(token);
 
             await _source.ReadDocumentsAsync(filter, transitChannel, _options.BatchSize,
@@ -95,6 +91,7 @@ namespace MongoTransit.Transit
                 _destination, token);
 
             var (processed, retried, failed) = await workerPool.StopAsync();
+            sw.Stop();
             
             _logger.Debug("Transfer was completed in {Elapsed}", sw.Elapsed);
             
