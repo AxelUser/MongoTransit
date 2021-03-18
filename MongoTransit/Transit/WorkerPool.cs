@@ -10,13 +10,14 @@ using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoTransit.Progress;
+using MongoTransit.Storage;
 using Serilog;
 
 namespace MongoTransit.Transit
 {
     public class WorkerPool
     {
-        private readonly IMongoCollection<BsonDocument> _collection;
+        private readonly DestinationRepositoryFactory _repositoryFactory;
         private readonly ChannelReader<List<ReplaceOneModel<BsonDocument>>> _batchReader;
         private readonly ProgressNotifier _notifier;
         private readonly bool _upsert;
@@ -32,15 +33,16 @@ namespace MongoTransit.Transit
 
         public WorkerPool(int insertionWorkersCount,
             int retryWorkersCount,
-            IMongoCollection<BsonDocument> collection,
+            string collectionName,
+            DestinationRepositoryFactory repositoryFactory,
             ChannelReader<List<ReplaceOneModel<BsonDocument>>> batchReader,
             ProgressNotifier notifier,
             bool upsert,
             bool dryRun,
             ILogger logger)
         {
-            _collection = collection;
-            _collectionName = _collection.CollectionNamespace.CollectionName;
+            _collectionName = collectionName;
+            _repositoryFactory = repositoryFactory;
             _batchReader = batchReader;
             _notifier = notifier;
             _upsert = upsert;
@@ -56,14 +58,16 @@ namespace MongoTransit.Transit
         {
             for (var workerN = 0; workerN < _insertionWorkers.Length; workerN++)
             {
-                _insertionWorkers[workerN] = RunWorker(_retriesChannel.Writer,
-                    _logger.ForContext("Scope", $"{_collectionName}-{workerN:00}"), token);
+                var workerLogger = _logger.ForContext("Scope", $"{_collectionName}-{workerN:00}");
+                _insertionWorkers[workerN] = RunWorker(_repositoryFactory.Create(workerLogger), _retriesChannel.Writer,
+                    workerLogger, token);
             }
 
             for (var retryWorkerN = 0; retryWorkerN < _retryWorkers.Length; retryWorkerN++)
             {
-                _retryWorkers[retryWorkerN] = RunRetryWorker(_retriesChannel.Reader,
-                    _logger.ForContext("Scope", $"{_collectionName}-Retry{retryWorkerN:00}"), token);
+                var retryLogger = _logger.ForContext("Scope", $"{_collectionName}-Retry{retryWorkerN:00}");
+                _retryWorkers[retryWorkerN] = RunRetryWorker(_repositoryFactory.Create(retryLogger), _retriesChannel.Reader,
+                    retryLogger, token);
             }
 
             _logger.Debug("Started {I:N0} insertion worker(s) and {R:0} retry worker(s)", _insertionWorkers.Length, _retryWorkers.Length);
@@ -81,12 +85,11 @@ namespace MongoTransit.Transit
             return await GetResultsAsync();
         }
         
-        private async Task<(long processed, long totalRetried, long failed)> RunWorker(ChannelWriter<ReplaceOneModel<BsonDocument>> failedWrites,
+        private async Task<(long processed, long totalRetried, long failed)> RunWorker(DestinationRepository repository,
+            ChannelWriter<ReplaceOneModel<BsonDocument>> failedWrites,
             ILogger workerLogger,
             CancellationToken token)
         {
-            var sw = new Stopwatch();
-            
             var totalProcessed = 0L;
             var totalRetried = 0L;
             var totalFailed = 0L;
@@ -97,17 +100,7 @@ namespace MongoTransit.Transit
                 {
                     if (!_dryRun)
                     {
-                        sw.Restart();
-                        var results = await _collection.BulkWriteAsync(batch, new BulkWriteOptions
-                        {
-                            IsOrdered = false,
-                            BypassDocumentValidation = true
-                        }, token);
-                        sw.Stop();
-
-                        workerLogger.Debug("Processed bulk of {count:N0} documents in {elapsed:N1} ms",
-                            batch.Count, sw.ElapsedMilliseconds);
-
+                        await repository.ReplaceManyAsync(batch, token);
                         totalProcessed += batch.Count;
                     }
 
@@ -156,30 +149,22 @@ namespace MongoTransit.Transit
             return (totalProcessed, totalRetried, totalFailed);
         }
 
-        private async Task<(long processed, long totalRetried, long failed)> RunRetryWorker(ChannelReader<ReplaceOneModel<BsonDocument>> failedWrites,
+        private async Task<(long processed, long totalRetried, long failed)> RunRetryWorker(DestinationRepository repository,
+            ChannelReader<ReplaceOneModel<BsonDocument>> failedWrites,
             ILogger workerLogger,
             CancellationToken token)
         {
-            var sw = new Stopwatch();
-            
             var totalProcessed = 0L;
             var totalFailed = 0L;
             
             await foreach (var failedReplace in failedWrites.ReadAllAsync(token))
             {
-                var documentId = failedReplace.Replacement["_id"].AsObjectId;
+                var documentId = failedReplace.Replacement["_id"];
                 try
                 {
                     if (!_dryRun)
                     {
-                        sw.Restart();
-                        await _collection.ReplaceOneAsync(failedReplace.Filter, failedReplace.Replacement, new ReplaceOptions
-                        {
-                            BypassDocumentValidation = true
-                        }, token);
-                        sw.Stop();
-                        
-                        workerLogger.Debug("Successfully retried replacement of document (ID: {id}) in {elapsed:N1} ms", documentId, sw.ElapsedMilliseconds);
+                        await repository.RetryReplaceAsync(failedReplace.Filter, failedReplace.Replacement, token);
 
                         totalProcessed++;
                     }

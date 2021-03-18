@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoTransit.Progress;
+using MongoTransit.Storage;
 using Serilog;
 
 namespace MongoTransit.Transit
@@ -18,7 +19,8 @@ namespace MongoTransit.Transit
         private readonly ILogger _logger;
         private readonly CollectionTransitOptions _options;
         private readonly IMongoCollection<BsonDocument> _fromCollection;
-        private readonly IMongoCollection<BsonDocument> _toCollection;
+        private readonly DestinationRepositoryFactory _destinationFactory;
+        private readonly DestinationRepository _destination;
 
         public CollectionTransitHandler(ProgressManager manager, ILogger logger, CollectionTransitOptions options)
         {
@@ -33,8 +35,11 @@ namespace MongoTransit.Transit
 
             // TODO check DB for existence
             // TODO check collection for existence
-            _toCollection = new MongoClient(options.DestinationConnectionString).GetDatabase(options.Database)
+            var destinationCollection = new MongoClient(options.DestinationConnectionString).GetDatabase(options.Database)
                 .GetCollection<BsonDocument>(options.Collection);
+
+            _destinationFactory = new DestinationRepositoryFactory(destinationCollection);
+            _destination = _destinationFactory.Create(_logger);
         }
         
         public async Task TransitAsync(bool dryRun, CancellationToken token)
@@ -76,8 +81,8 @@ namespace MongoTransit.Transit
             _manager.Attach(_options.Collection, notifier);
 
             var workerPool = new WorkerPool(_options.Workers * Environment.ProcessorCount,
-                _options.Workers * Environment.ProcessorCount,
-                _toCollection, transitChannel, notifier, _options.Upsert, dryRun, _logger);
+                _options.Workers * Environment.ProcessorCount, _options.Collection,
+                _destinationFactory, transitChannel, notifier, _options.Upsert, dryRun, _logger);
             
             sw.Restart();
 
@@ -93,9 +98,7 @@ namespace MongoTransit.Transit
                 _logger.Debug("Started reading documents from source");
                 await ReadDocumentsAsync(sourceCursor, transitChannel.Writer, token);
             }
-
-
-
+            
             var (processed, retried, failed) = await workerPool.StopAsync();
             
             _logger.Debug("Transfer was completed in {elapsed}", sw.Elapsed);
@@ -114,7 +117,7 @@ namespace MongoTransit.Transit
             
             var filter = new BsonDocument();
             progress.Status = "Removing documents from destination...";
-            await _toCollection.DeleteManyAsync(filter, token);
+            await _destination.DeleteAllDocumentsAsync(token);
             progress.Status = "Counting documents...";
             var count = await _fromCollection.CountDocumentsAsync(filter, cancellationToken: token);
             return (filter, count);
@@ -139,7 +142,7 @@ namespace MongoTransit.Transit
             else
             {
                 _logger.Debug("Fetching last checkpoint for collection {Collection}", _options.Collection);
-                lastCheckpoint = await FindCheckpointAsync(_toCollection, checkpointField, token);
+                lastCheckpoint = await _destination.FindLastCheckpointAsync(checkpointField, token);
                 lastCheckpoint -= offset;
             }
             
@@ -188,8 +191,7 @@ namespace MongoTransit.Transit
                 if (_options.FetchKeyFromDestination)
                 {
                     // TODO maybe defer and put it in batch
-                    var foundDestinationDoc = await (await _toCollection.FindAsync(new BsonDocument("_id", document["_id"]),
-                        cancellationToken: token)).SingleOrDefaultAsync(token);
+                    var foundDestinationDoc = await _destination.FindDocumentAsync(document, token);
                     if (foundDestinationDoc != null)
                     {
                         fields = foundDestinationDoc;
@@ -215,35 +217,6 @@ namespace MongoTransit.Transit
                 };
                 return model;
             }
-        }
-
-        
-        private static async Task<DateTime?> FindCheckpointAsync(IMongoCollection<BsonDocument> collection, string checkpointField, CancellationToken token)
-        {
-            var checkpointBson = await (await collection.FindAsync(new BsonDocument
-            {
-                [checkpointField] = new BsonDocument
-                {
-                    ["$exists"] = true,
-                    ["$ne"] = BsonNull.Value
-                }
-            }, new FindOptions<BsonDocument>
-            {
-                Sort = new BsonDocument(checkpointField, -1),
-                Limit = 1,
-                Projection = new BsonDocument
-                {
-                    ["_id"] = true,
-                    [checkpointField] = true
-                }
-            }, token)).SingleOrDefaultAsync(token);
-
-            if (checkpointBson == null)
-            {
-                return null;
-            }
-
-            return checkpointBson[checkpointField].ToUniversalTime();
         }
 
         private async Task<long> CountLagAsync(string field, DateTime checkpoint, CancellationToken token)
