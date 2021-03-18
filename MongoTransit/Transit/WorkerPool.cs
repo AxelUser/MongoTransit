@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -120,14 +121,16 @@ namespace MongoTransit.Transit
                 {
                     var retries = 0;
                     var fails = 0;
-                    
+
+                    var errSb = new StringBuilder();
                     foreach (var error in bwe.WriteErrors)
                     {
+                        var failedRequest = batch[error.Index];
+                        errSb.AppendLine($"(ID: {failedRequest.Replacement["_id"]}) {error.Message}");
                         switch (error.Message)
                         {
                             case ErrorUpdateWithMoveToAnotherShard:
-                                await failedWrites.WriteAsync(
-                                    (ReplaceOneModel<BsonDocument>) bwe.Result.ProcessedRequests[error.Index], token);
+                                await failedWrites.WriteAsync(failedRequest, token);
                                 retries++;
                                 break;
                             default:
@@ -142,7 +145,7 @@ namespace MongoTransit.Transit
 
                     workerLogger.Error("{N:N0} documents failed to transfer, {R:N0} were sent to retry. Total batch: {B:N0}",
                         fails, retries, batch.Count);
-                    workerLogger.Debug(bwe, "Bulk write exception details:");
+                    workerLogger.Debug("Bulk write exception details:\n{Errors}", errSb.ToString());
                 }
                 catch (Exception e)
                 {
@@ -188,7 +191,7 @@ namespace MongoTransit.Transit
                 }
                 catch (MongoWriteException we)
                 {
-                    workerLogger.Error("Failed to retry replacement (ID: {id}): {msg}", documentId, we.Message);
+                    workerLogger.Error("Failed to retry replacement (ID: {Id}): {Msg}", documentId, we.Message);
                     workerLogger.Debug(we, "Retry exception details:");
                     totalFailed++;
                 }
