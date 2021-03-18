@@ -1,13 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoTransit.Progress;
+using MongoTransit.Storage;
 using Serilog;
 
 namespace MongoTransit.Transit
@@ -17,24 +17,21 @@ namespace MongoTransit.Transit
         private readonly ProgressManager _manager;
         private readonly ILogger _logger;
         private readonly CollectionTransitOptions _options;
-        private readonly IMongoCollection<BsonDocument> _fromCollection;
-        private readonly IMongoCollection<BsonDocument> _toCollection;
+        private readonly DestinationRepositoryFactory _destinationFactory;
+        private readonly DestinationRepository _destination;
+        private readonly SourceRepository _source;
 
         public CollectionTransitHandler(ProgressManager manager, ILogger logger, CollectionTransitOptions options)
         {
             _manager = manager;
             _logger = logger;
             _options = options;
-            
-            // TODO check DB for existence
-            // TODO check collection for existence
-            _fromCollection = new MongoClient(options.SourceConnectionString).GetDatabase(options.Database)
-                .GetCollection<BsonDocument>(options.Collection);
 
-            // TODO check DB for existence
-            // TODO check collection for existence
-            _toCollection = new MongoClient(options.DestinationConnectionString).GetDatabase(options.Database)
-                .GetCollection<BsonDocument>(options.Collection);
+            _destinationFactory = new DestinationRepositoryFactory(options.DestinationConnectionString,
+                options.Database, options.Collection);
+            _destination = _destinationFactory.Create(_logger);
+            _source = new SourceRepository(options.SourceConnectionString, options.Database, options.Collection,
+                logger);
         }
         
         public async Task TransitAsync(bool dryRun, CancellationToken token)
@@ -76,30 +73,20 @@ namespace MongoTransit.Transit
             _manager.Attach(_options.Collection, notifier);
 
             var workerPool = new WorkerPool(_options.Workers * Environment.ProcessorCount,
-                _options.Workers * Environment.ProcessorCount,
-                _toCollection, transitChannel, notifier, _options.Upsert, dryRun, _logger);
+                _options.Workers * Environment.ProcessorCount, _options.Collection,
+                _destinationFactory, transitChannel, notifier, _options.Upsert, dryRun, _logger);
             
             sw.Restart();
 
             workerPool.Start(token);
-            
-            _logger.Debug("Creating a cursor to the source with batch size {batch}", _options.BatchSize);
-            using (var sourceCursor = await _fromCollection.FindAsync(
-                filter, new FindOptions<BsonDocument>
-                {
-                    BatchSize = _options.BatchSize
-                }, token))
-            {
-                _logger.Debug("Started reading documents from source");
-                await ReadDocumentsAsync(sourceCursor, transitChannel.Writer, token);
-            }
 
-
+            await _source.ReadDocumentsAsync(filter, transitChannel, _options.BatchSize,
+                _options.FetchKeyFromDestination, _options.KeyFields ?? Array.Empty<string>(), _options.Upsert,
+                _destination, token);
 
             var (processed, retried, failed) = await workerPool.StopAsync();
             
             _logger.Debug("Transfer was completed in {elapsed}", sw.Elapsed);
-
             
             _logger.Information("Transferred {S}; Retried {R}; Failed {F};", processed, retried, failed);
         }
@@ -114,9 +101,9 @@ namespace MongoTransit.Transit
             
             var filter = new BsonDocument();
             progress.Status = "Removing documents from destination...";
-            await _toCollection.DeleteManyAsync(filter, token);
+            await _destination.DeleteAllDocumentsAsync(token);
             progress.Status = "Counting documents...";
-            var count = await _fromCollection.CountDocumentsAsync(filter, cancellationToken: token);
+            var count = await _source.CountAllDocumentsAsync(token);
             return (filter, count);
         }
 
@@ -139,7 +126,7 @@ namespace MongoTransit.Transit
             else
             {
                 _logger.Debug("Fetching last checkpoint for collection {Collection}", _options.Collection);
-                lastCheckpoint = await FindCheckpointAsync(_toCollection, checkpointField, token);
+                lastCheckpoint = await _destination.FindLastCheckpointAsync(checkpointField, token);
                 lastCheckpoint -= offset;
             }
             
@@ -150,110 +137,14 @@ namespace MongoTransit.Transit
 
             _logger.Debug("Counting how many documents should be transferred");
             progress.Status = "Counting documents...";
-            var count = await CountLagAsync(checkpointField, lastCheckpoint.Value, token);
+            var count = await _source.CountLagAsync(checkpointField, lastCheckpoint.Value, token);
 
-            _logger.Debug("Collection {Collection} has checkpoint {lastCheckpoint} and lag {lag:N0}",
+            _logger.Debug("Collection {Collection} has checkpoint {LastCheckpoint} and lag {Lag:N0}",
                 _options.Collection, lastCheckpoint, count);
             
             var filter = new BsonDocument(checkpointField, new BsonDocument("$gte", lastCheckpoint));
 
             return (filter, count);
-        }
-
-        private async Task ReadDocumentsAsync(IAsyncCursor<BsonDocument> cursor,
-            ChannelWriter<List<ReplaceOneModel<BsonDocument>>> batchWriter, CancellationToken token)
-        {
-
-            try
-            {
-                while (await cursor.MoveNextAsync(token))
-                {
-                    var replaceModels = new List<ReplaceOneModel<BsonDocument>>();
-                    foreach (var document in cursor.Current)
-                    {
-                        replaceModels.Add(await CreateReplaceModelAsync(document));
-                    }
-
-                    await batchWriter.WriteAsync(replaceModels, token);
-                }
-            }
-            finally
-            {
-                batchWriter.Complete();
-            }
-            
-            async Task<ReplaceOneModel<BsonDocument>> CreateReplaceModelAsync(BsonDocument document)
-            {
-                var fields = document;
-                if (_options.FetchKeyFromDestination)
-                {
-                    // TODO maybe defer and put it in batch
-                    var foundDestinationDoc = await (await _toCollection.FindAsync(new BsonDocument("_id", document["_id"]),
-                        cancellationToken: token)).SingleOrDefaultAsync(token);
-                    if (foundDestinationDoc != null)
-                    {
-                        fields = foundDestinationDoc;
-                    }
-                }
-
-                var filter = new BsonDocument();
-                if (_options.KeyFields?.Any() == true)
-                {
-                    foreach (var field in _options.KeyFields)
-                    {
-                        filter[field] = fields[field];
-                    }
-                }
-                else
-                {
-                    filter["_id"] = fields["_id"];
-                }
-
-                var model = new ReplaceOneModel<BsonDocument>(filter, document)
-                {
-                    IsUpsert = _options.Upsert
-                };
-                return model;
-            }
-        }
-
-        
-        private static async Task<DateTime?> FindCheckpointAsync(IMongoCollection<BsonDocument> collection, string checkpointField, CancellationToken token)
-        {
-            var checkpointBson = await (await collection.FindAsync(new BsonDocument
-            {
-                [checkpointField] = new BsonDocument
-                {
-                    ["$exists"] = true,
-                    ["$ne"] = BsonNull.Value
-                }
-            }, new FindOptions<BsonDocument>
-            {
-                Sort = new BsonDocument(checkpointField, -1),
-                Limit = 1,
-                Projection = new BsonDocument
-                {
-                    ["_id"] = true,
-                    [checkpointField] = true
-                }
-            }, token)).SingleOrDefaultAsync(token);
-
-            if (checkpointBson == null)
-            {
-                return null;
-            }
-
-            return checkpointBson[checkpointField].ToUniversalTime();
-        }
-
-        private async Task<long> CountLagAsync(string field, DateTime checkpoint, CancellationToken token)
-        {
-            var filter = new BsonDocument
-            {
-                [field] = new BsonDocument("$gte", checkpoint)
-            };
-
-            return await _fromCollection.CountDocumentsAsync(filter, cancellationToken: token);
         }
     }
 }
