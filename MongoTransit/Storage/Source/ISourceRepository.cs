@@ -10,7 +10,7 @@ namespace MongoTransit.Storage.Source
 {
     public interface ISourceRepository
     {
-        Task ReadDocumentsAsync(FilterDefinition<BsonDocument> filter,
+        Task ReadDocumentsAsync(BsonDocument filter,
             ChannelWriter<List<ReplaceOneModel<BsonDocument>>> batchWriter,
             int batchSize,
             bool fetchKeyFromDestination,

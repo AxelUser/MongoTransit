@@ -21,7 +21,7 @@ namespace MongoTransit.Storage.Source
             _logger = logger;
         }
 
-        public async Task ReadDocumentsAsync(FilterDefinition<BsonDocument> filter,
+        public async Task ReadDocumentsAsync(BsonDocument filter,
             ChannelWriter<List<ReplaceOneModel<BsonDocument>>> batchWriter,
             int batchSize,
             bool fetchKeyFromDestination,

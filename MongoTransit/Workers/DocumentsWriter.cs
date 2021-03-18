@@ -13,11 +13,11 @@ using Serilog;
 
 namespace MongoTransit.Workers
 {
-    public class WorkerPool : IWorkerPool
+    public class DocumentsWriter : IDocumentsWriter
     {
         private readonly IDestinationRepositoryFactory _repositoryFactory;
         private readonly ChannelReader<List<ReplaceOneModel<BsonDocument>>> _batchReader;
-        private readonly ProgressNotifier _notifier;
+        private readonly IProgressNotifier _notifier;
         private readonly bool _upsert;
         private readonly bool _dryRun;
         private readonly ILogger _logger;
@@ -29,12 +29,12 @@ namespace MongoTransit.Workers
         private const string ErrorUpdateWithMoveToAnotherShard =
             "Document shard key value updates that cause the doc to move shards must be sent with write batch of size 1";
 
-        public WorkerPool(int insertionWorkersCount,
+        public DocumentsWriter(int insertionWorkersCount,
             int retryWorkersCount,
             string collectionName,
             IDestinationRepositoryFactory repositoryFactory,
             ChannelReader<List<ReplaceOneModel<BsonDocument>>> batchReader,
-            ProgressNotifier notifier,
+            IProgressNotifier notifier,
             bool upsert,
             bool dryRun,
             ILogger logger)
@@ -51,8 +51,14 @@ namespace MongoTransit.Workers
             
             _retriesChannel = Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>();
         }
-        
-        public void Start(CancellationToken token)
+
+        public async Task<TransferResults> WriteAsync(CancellationToken token)
+        {
+            StartWorkers(token);
+            return await WaitUntilFinishedAsync();
+        }
+
+        private void StartWorkers(CancellationToken token)
         {
             for (var workerN = 0; workerN < _insertionWorkers.Length; workerN++)
             {
@@ -71,9 +77,9 @@ namespace MongoTransit.Workers
             _logger.Debug("Started {I:N0} insertion worker(s) and {R:0} retry worker(s)", _insertionWorkers.Length, _retryWorkers.Length);
         }
 
-        public async Task<(long processed, long retried, long failed)> StopAsync()
+        private async Task<TransferResults> WaitUntilFinishedAsync()
         {
-            _logger.Debug("Finished reading documents, waiting for insertion-workers");
+            _logger.Debug("Waiting for insertion-workers to finish");
             await Task.WhenAll(_insertionWorkers);
             
             _logger.Debug("Insertion-workers finished, waiting for retry-workers");
@@ -134,13 +140,18 @@ namespace MongoTransit.Workers
                     totalRetried += retries;
                     totalProcessed += bwe.Result.ProcessedRequests.Count - fails - retries;
 
-                    workerLogger.Error("{N:N0} documents failed to transfer, {R:N0} were sent to retry. Total batch: {B:N0}",
+                    workerLogger.Error(
+                        "{N:N0} documents failed to transfer, {R:N0} were sent to retry. Total batch: {B:N0}",
                         fails, retries, batch.Count);
                     workerLogger.Debug("Bulk write exception details:\n{Errors}", errSb.ToString());
                 }
                 catch (Exception e)
                 {
                     workerLogger.Error(e, "Error occurred while transferring documents");
+                }
+                finally
+                {
+                    token.ThrowIfCancellationRequested();
                 }
             } 
             
@@ -180,7 +191,7 @@ namespace MongoTransit.Workers
                 }
                 catch (Exception e)
                 {
-                    workerLogger.Error(e, "Error occurred while transferring documents to {collection}", _collectionName);
+                    workerLogger.Error(e, "Error occurred while transferring documents to {Collection}", _collectionName);
                     totalFailed++;
                 }
             }
@@ -188,7 +199,7 @@ namespace MongoTransit.Workers
             return (totalProcessed, 0, totalFailed);
         }
 
-        private async Task<(long processed, long retried, long failed)> GetResultsAsync()
+        private async Task<TransferResults> GetResultsAsync()
         {
             var processed = 0L;
             var retried = 0L;
@@ -202,7 +213,7 @@ namespace MongoTransit.Workers
                 failed += f;
             }
 
-            return (processed, retried, failed);
+            return new TransferResults(processed, retried, failed);
         }
     }
 }

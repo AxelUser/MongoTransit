@@ -21,14 +21,14 @@ namespace MongoTransit.Transit
         private readonly ILogger _logger;
         private readonly CollectionTransitOptions _options;
         private readonly ICollectionPreparationHandler _preparationHandler;
-        private readonly IWorkerPoolFactory _workerPoolFactory;
+        private readonly IDocumentsWriterFactory _documentsWriterFactory;
         private readonly IDestinationRepository _destination;
         private readonly ISourceRepository _source;
 
         public CollectionTransitHandler(ISourceRepositoryFactory sourceRepositoryFactory,
             IDestinationRepositoryFactory destinationRepositoryFactory,
             ICollectionPreparationHandler preparationHandler,
-            IWorkerPoolFactory workerPoolFactory,
+            IDocumentsWriterFactory documentsWriterFactory,
             IProgressManager manager,
             ILogger logger,
             CollectionTransitOptions options)
@@ -41,7 +41,7 @@ namespace MongoTransit.Transit
             _source = sourceRepositoryFactory.Create(_logger);
             
             _preparationHandler = preparationHandler;
-            _workerPoolFactory = workerPoolFactory;
+            _documentsWriterFactory = documentsWriterFactory;
         }
         
         public async Task TransitAsync(bool dryRun, CancellationToken token)
@@ -66,9 +66,6 @@ namespace MongoTransit.Transit
 
         private async Task InternalTransit(bool dryRun, TextStatusProvider progress, CancellationToken token)
         {
-            var sw = new Stopwatch();
-            sw.Start();
-            
             var transitChannel = Channel.CreateBounded<List<ReplaceOneModel<BsonDocument>>>(_options.Workers);
 
             var (filter, count) = await _preparationHandler.PrepareCollectionAsync(_options.IterativeTransferOptions, progress, token);
@@ -82,15 +79,18 @@ namespace MongoTransit.Transit
             var notifier = new ProgressNotifier(count);
             _manager.Attach(_options.Collection, notifier);
 
-            var workerPool = _workerPoolFactory.Create(transitChannel, notifier, _options.Upsert, dryRun);
+            var writer = _documentsWriterFactory.Create(transitChannel, notifier, _options.Upsert, dryRun);
 
-            workerPool.Start(token);
+            var sw = new Stopwatch();
+            sw.Start();
+
+            var write = writer.WriteAsync(token);
 
             await _source.ReadDocumentsAsync(filter, transitChannel, _options.BatchSize,
                 _options.FetchKeyFromDestination, _options.KeyFields ?? Array.Empty<string>(), _options.Upsert,
                 _destination, token);
 
-            var (processed, retried, failed) = await workerPool.StopAsync();
+            var (processed, retried, failed) = await write;
             sw.Stop();
             
             _logger.Debug("Transfer was completed in {Elapsed}", sw.Elapsed);

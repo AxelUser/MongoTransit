@@ -8,7 +8,7 @@ using Serilog;
 
 namespace MongoTransit.Workers
 {
-    public class WorkerPoolFactory : IWorkerPoolFactory
+    public class DocumentsWriterFactory : IDocumentsWriterFactory
     {
         private readonly int _insertionWorkersCount;
         private readonly int _retryWorkersCount;
@@ -16,7 +16,7 @@ namespace MongoTransit.Workers
         private readonly IDestinationRepositoryFactory _destinationRepositoryFactory;
         private readonly ILogger _logger;
 
-        public WorkerPoolFactory(int insertionWorkersCount,
+        public DocumentsWriterFactory(int insertionWorkersCount,
             int retryWorkersCount,
             string collectionName,
             IDestinationRepositoryFactory destinationRepositoryFactory,
@@ -29,9 +29,10 @@ namespace MongoTransit.Workers
             _logger = logger;
         }
         
-        public IWorkerPool Create(ChannelReader<List<ReplaceOneModel<BsonDocument>>> batchReader, ProgressNotifier notifier, bool upsert, bool dryRun)
+        public IDocumentsWriter Create(ChannelReader<List<ReplaceOneModel<BsonDocument>>> batchReader,
+            IProgressNotifier notifier, bool upsert, bool dryRun)
         {
-            return new WorkerPool(_insertionWorkersCount, _retryWorkersCount, _collectionName,
+            return new DocumentsWriter(_insertionWorkersCount, _retryWorkersCount, _collectionName,
                 _destinationRepositoryFactory, batchReader, notifier, upsert, dryRun, _logger);
         }
     }

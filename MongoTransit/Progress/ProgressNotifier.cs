@@ -2,7 +2,7 @@ using System.Threading;
 
 namespace MongoTransit.Progress
 {
-    public class ProgressNotifier: IOperationStatusProvider
+    public class ProgressNotifier: IOperationStatusProvider, IProgressNotifier
     {
         private readonly long _max;
         private long _current;

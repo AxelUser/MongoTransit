@@ -72,7 +72,7 @@ namespace MongoTransit.Transit
                 destFactory.Create(logger), sourceFactory.Create(logger), logger);
 
             var workersCount = currentOptions.Workers * Environment.ProcessorCount;
-            var workerPoolFactory = new WorkerPoolFactory(workersCount, workersCount, currentOptions.Collection,
+            var workerPoolFactory = new DocumentsWriterFactory(workersCount, workersCount, currentOptions.Collection,
                 destFactory, logger);
             
             // ReSharper disable once ConstantNullCoalescingCondition

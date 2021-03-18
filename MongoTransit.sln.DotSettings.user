@@ -1,6 +1,6 @@
 ﻿<wpf:ResourceDictionary xml:space="preserve" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:s="clr-namespace:System;assembly=mscorlib" xmlns:ss="urn:shemas-jetbrains-com:settings-storage-xaml" xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=788db056_002D1410_002D4582_002Da27b_002Df048f9c771a2/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="TransitAsync_ShouldRestoreDocuments_FullRestore" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;&#xD;
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=c60654ab_002Dfd6a_002D4672_002Db98f_002D983b3107426e/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="WriteAsync_ShouldWriteAllRequests_NoErrors" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;&#xD;
   &lt;TestAncestor&gt;&#xD;
-    &lt;TestId&gt;xUnit::AD7CAC94-C64B-4F78-B7C7-7C4AC4776569::net5.0::MongoTransit.UnitTests.CollectionTransitHandlerTests.TransitAsync_ShouldCompletedWithoutRestore_CollectionUpToDate&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::AD7CAC94-C64B-4F78-B7C7-7C4AC4776569::net5.0::MongoTransit.UnitTests.DocumentsWriterTests.WriteAsync_ShouldWriteAllRequests_NoErrors&lt;/TestId&gt;&#xD;
   &lt;/TestAncestor&gt;&#xD;
 &lt;/SessionState&gt;</s:String></wpf:ResourceDictionary>

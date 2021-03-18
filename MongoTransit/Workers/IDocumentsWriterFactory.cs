@@ -6,10 +6,10 @@ using MongoTransit.Progress;
 
 namespace MongoTransit.Workers
 {
-    public interface IWorkerPoolFactory
+    public interface IDocumentsWriterFactory
     {
-        IWorkerPool Create(ChannelReader<List<ReplaceOneModel<BsonDocument>>> batchReader,
-            ProgressNotifier notifier,
+        IDocumentsWriter Create(ChannelReader<List<ReplaceOneModel<BsonDocument>>> batchReader,
+            IProgressNotifier notifier,
             bool upsert,
             bool dryRun);
     }
