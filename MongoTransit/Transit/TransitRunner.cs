@@ -15,7 +15,7 @@ namespace MongoTransit.Transit
         public static async Task RunAsync(ILogger logger, CollectionTransitOptions[] options,
             IEnumerable<int> cyclesIterator, bool dryRun, TimeSpan notificationInterval, CancellationToken token)
         {
-            var handlers = new CollectionTransitHandler[options.Length];
+            var handlers = new CollectionTransitHandler?[options.Length];
             var operations = new Task[options.Length];
 
             var progressNotification = StartNotifier(logger, notificationInterval);
@@ -31,22 +31,14 @@ namespace MongoTransit.Transit
                     {
                         var currentOptions = options[idx];
                         
-                        var sourceFactory = new SourceRepositoryFactory(currentOptions.SourceConnectionString,
-                            currentOptions.Database, currentOptions.Collection);
-                        var destFactory = new DestinationRepositoryFactory(currentOptions.DestinationConnectionString,
-                            currentOptions.Database, currentOptions.Collection);
+                        handlers[idx] = handlers[idx] == null ? CreateCollectionHandler(currentOptions, progressNotification, logger) : handlers[idx];
+                        var handler = handlers[idx];
                         
-                        // ReSharper disable once ConstantNullCoalescingCondition
-                        handlers[idx] ??= new CollectionTransitHandler(sourceFactory, destFactory, progressNotification.Manager,
-                            logger.ForContext("Scope", currentOptions.Collection), currentOptions);
-
-                        var currentHandler = handlers[idx];
-
                         operations[idx] = Task.Run(async () =>
                         {
                             try
                             {
-                                await currentHandler.TransitAsync(dryRun, token);
+                                await handler!.TransitAsync(dryRun, token);
                             }
                             catch (Exception e)
                             {
@@ -64,6 +56,25 @@ namespace MongoTransit.Transit
             {
                 await StopNotifier(progressNotification);
             }
+        }
+
+        private static CollectionTransitHandler CreateCollectionHandler(CollectionTransitOptions currentOptions,
+            NotificationLoop progressNotification, ILogger logger)
+        {
+            var collectionLogger = logger.ForContext("Scope", currentOptions.Collection);
+
+            var sourceFactory = new SourceRepositoryFactory(currentOptions.SourceConnectionString,
+                currentOptions.Database, currentOptions.Collection);
+            var destFactory = new DestinationRepositoryFactory(currentOptions.DestinationConnectionString,
+                currentOptions.Database, currentOptions.Collection);
+            var preparationHandler = new CollectionPreparationHandler(currentOptions.Collection,
+                destFactory.Create(logger), sourceFactory.Create(logger), logger);
+
+            // ReSharper disable once ConstantNullCoalescingCondition
+            var handler = new CollectionTransitHandler(sourceFactory, destFactory, preparationHandler,
+                progressNotification.Manager,
+                collectionLogger, currentOptions);
+            return handler;
         }
 
         private record NotificationLoop(Task Loop, ProgressManager Manager, CancellationTokenSource Cancellation);
