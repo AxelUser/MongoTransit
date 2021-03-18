@@ -18,8 +18,8 @@ namespace MongoTransit.Transit
         private readonly ILogger _logger;
         private readonly CollectionTransitOptions _options;
         private readonly DestinationRepositoryFactory _destinationFactory;
-        private readonly DestinationRepository _destination;
-        private readonly SourceRepository _source;
+        private readonly IDestinationRepository _destination;
+        private readonly ISourceRepository _source;
 
         public CollectionTransitHandler(ProgressManager manager, ILogger logger, CollectionTransitOptions options)
         {

@@ -4,7 +4,7 @@ using Serilog;
 
 namespace MongoTransit.Storage
 {
-    public class DestinationRepositoryFactory
+    public class DestinationRepositoryFactory : IDestinationRepositoryFactory
     {
         private readonly string _connectionString;
         private readonly string _database;

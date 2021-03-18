@@ -13,9 +13,9 @@ using Serilog;
 
 namespace MongoTransit.Transit
 {
-    public class WorkerPool
+    public class WorkerPool : IWorkerPool
     {
-        private readonly DestinationRepositoryFactory _repositoryFactory;
+        private readonly IDestinationRepositoryFactory _repositoryFactory;
         private readonly ChannelReader<List<ReplaceOneModel<BsonDocument>>> _batchReader;
         private readonly ProgressNotifier _notifier;
         private readonly bool _upsert;
@@ -32,7 +32,7 @@ namespace MongoTransit.Transit
         public WorkerPool(int insertionWorkersCount,
             int retryWorkersCount,
             string collectionName,
-            DestinationRepositoryFactory repositoryFactory,
+            IDestinationRepositoryFactory repositoryFactory,
             ChannelReader<List<ReplaceOneModel<BsonDocument>>> batchReader,
             ProgressNotifier notifier,
             bool upsert,

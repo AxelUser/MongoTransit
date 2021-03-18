@@ -10,7 +10,7 @@ using Serilog;
 
 namespace MongoTransit.Storage
 {
-    public class SourceRepository
+    public class SourceRepository : ISourceRepository
     {
         private readonly IMongoCollection<BsonDocument> _collection;
         private readonly ILogger _logger;
