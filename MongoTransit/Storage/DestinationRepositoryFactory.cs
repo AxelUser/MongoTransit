@@ -6,16 +6,20 @@ namespace MongoTransit.Storage
 {
     public class DestinationRepositoryFactory
     {
-        private readonly IMongoCollection<BsonDocument> _collection;
+        private readonly string _connectionString;
+        private readonly string _database;
+        private readonly string _collectionName;
 
-        public DestinationRepositoryFactory(IMongoCollection<BsonDocument> collection)
+        public DestinationRepositoryFactory(string connectionString, string database, string collectionName)
         {
-            _collection = collection;
+            _connectionString = connectionString;
+            _database = database;
+            _collectionName = collectionName;
         }
 
         public DestinationRepository Create(ILogger logger)
         {
-            return new DestinationRepository(_collection, logger);
+            return new DestinationRepository(_connectionString, _database, _collectionName, logger);
         }
     }
 }

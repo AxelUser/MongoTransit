@@ -10,14 +10,17 @@ using Serilog;
 
 namespace MongoTransit.Storage
 {
-    public class DestinationRepository
+    public class DestinationRepository: IDocumentFinder
     {
         private readonly IMongoCollection<BsonDocument> _collection;
         private readonly ILogger _logger;
 
-        public DestinationRepository(IMongoCollection<BsonDocument> collection, ILogger logger)
+        public DestinationRepository(string connectionString, string database, string collectionName, ILogger logger)
         {
-            _collection = collection;
+            // TODO check DB for existence
+            // TODO check collection for existence
+            _collection = new MongoClient(connectionString).GetDatabase(database)
+                .GetCollection<BsonDocument>(collectionName);
             _logger = logger;
         }
 
