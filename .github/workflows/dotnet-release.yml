@@ -17,8 +17,12 @@ jobs:
         dotnet-version: 5.0.x
     - name: Restore dependencies
       run: dotnet restore
+    - name: Build
+      run: dotnet build --configuration Release --runtime linux-x64 --no-restore
+    - name: Unit tests
+      run: dotnet test --no-restore --verbosity normal
     - name: Publish Linux x64
-      run: dotnet publish --configuration Release --runtime linux-x64 -p:PublishSingleFile=true 
+      run: dotnet publish --configuration Release --runtime linux-x64 -p:PublishSingleFile=true --no-restore
     - name: Upload MongoTransit executable into build artifacts
       uses: actions/upload-artifact@v2
       with:
