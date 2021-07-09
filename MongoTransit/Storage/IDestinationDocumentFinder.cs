@@ -4,7 +4,7 @@ using MongoDB.Bson;
 
 namespace MongoTransit.Storage
 {
-    public interface IDocumentFinder
+    public interface IDestinationDocumentFinder
     {
         public Task<BsonDocument> FindDocumentAsync(BsonDocument document, CancellationToken token);
     }

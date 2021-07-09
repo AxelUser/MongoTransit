@@ -26,7 +26,7 @@ namespace MongoTransit.Storage.Source
             bool fetchKeyFromDestination,
             string[] keyFields,
             bool upsert,
-            IDocumentFinder documentFinder,
+            IDestinationDocumentFinder documentFinder,
             CancellationToken token)
         {
             _logger.Debug("Creating a cursor to the source with batch size {Batch}", batchSize);
@@ -40,6 +40,9 @@ namespace MongoTransit.Storage.Source
             {
                 while (await cursor.MoveNextAsync(token))
                 {
+                    if (cursor.Current == null || !cursor.Current.Any())
+                        continue;
+                    
                     var replaceModels = new List<ReplaceOneModel<BsonDocument>>();
                     foreach (var document in cursor.Current)
                     {
@@ -65,7 +68,7 @@ namespace MongoTransit.Storage.Source
             bool fetchKeyFromDestination,
             string[] keyFields,
             bool upsert,
-            IDocumentFinder documentFinder,
+            IDestinationDocumentFinder documentFinder,
             CancellationToken token)
         {
             var fields = document;

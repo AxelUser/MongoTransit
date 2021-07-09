@@ -7,7 +7,7 @@ using MongoDB.Driver;
 
 namespace MongoTransit.Storage.Destination
 {
-    public interface IDestinationRepository: IDocumentFinder
+    public interface IDestinationRepository: IDestinationDocumentFinder
     {
         Task ReplaceManyAsync(List<ReplaceOneModel<BsonDocument>> replacements, CancellationToken token);
         Task RetryReplaceAsync(FilterDefinition<BsonDocument> filter, BsonDocument replacement, CancellationToken token);

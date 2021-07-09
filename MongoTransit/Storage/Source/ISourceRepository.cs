@@ -15,7 +15,7 @@ namespace MongoTransit.Storage.Source
             bool fetchKeyFromDestination,
             string[] keyFields,
             bool upsert,
-            IDocumentFinder documentFinder,
+            IDestinationDocumentFinder documentFinder,
             CancellationToken token);
 
         Task<long> CountLagAsync(BsonDocument filter, CancellationToken token);
