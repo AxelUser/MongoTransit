@@ -45,7 +45,7 @@ namespace MongoTransit.Storage.Destination
         public async Task RetryReplaceAsync(FilterDefinition<BsonDocument> filter, BsonDocument replacement, CancellationToken token)
         {
             var sw = new Stopwatch();
-            sw.Restart();
+            sw.Start();
             await _collection.ReplaceOneAsync(filter, replacement, new ReplaceOptions
             {
                 BypassDocumentValidation = true

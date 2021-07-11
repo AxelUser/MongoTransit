@@ -6,7 +6,6 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using AutoFixture;
 using FluentAssertions;
-using Mongo2Go;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoTransit.Storage;
@@ -19,18 +18,14 @@ using Xunit;
 namespace MongoTransit.IntegrationTests
 {
     
-    public class SourceRepositoryTests: IDisposable
+    public class SourceRepositoryTests: RepositoriesTestBase
     {
-        private readonly List<MongoDbRunner> _runners = new();
-        private readonly Fixture _fixture;
         private readonly IMongoCollection<BsonDocument> _sourceCollection;
         private readonly SourceRepository _sut;
 
         public SourceRepositoryTests()
         {
-            _fixture = new Fixture();
-
-            var (_, collection) = CreateConnection();
+            var (_, collection) = CreateConnection(nameof(SourceRepositoryTests));
             _sourceCollection = collection;
 
             _sut = new SourceRepository(_sourceCollection, new Mock<ILogger>().Object);
@@ -46,7 +41,7 @@ namespace MongoTransit.IntegrationTests
             var finderMock = new Mock<IDestinationDocumentFinder>();
             await _sourceCollection.InsertManyAsync(Enumerable.Range(0, 100).Select(_ => new BsonDocument
             {
-                ["Value"] = _fixture.Create<string>(),
+                ["Value"] = Fixture.Create<string>(),
             }));
 
             // Act
@@ -93,7 +88,7 @@ namespace MongoTransit.IntegrationTests
             var finderMock = new Mock<IDestinationDocumentFinder>();
             await _sourceCollection.InsertManyAsync(Enumerable.Range(0, 100).Select(_ => new BsonDocument
             {
-                ["Value"] = _fixture.Create<string>(),
+                ["Value"] = Fixture.Create<string>(),
             }));
 
             // Act
@@ -116,7 +111,7 @@ namespace MongoTransit.IntegrationTests
             var finderMock = new Mock<IDestinationDocumentFinder>();
             await _sourceCollection.InsertManyAsync(Enumerable.Range(0, 100).Select(_ => new BsonDocument
             {
-                ["Value"] = _fixture.Create<string>(),
+                ["Value"] = Fixture.Create<string>(),
             }));
             
             // Act
@@ -135,7 +130,7 @@ namespace MongoTransit.IntegrationTests
             await _sourceCollection.InsertManyAsync(Enumerable.Range(0, 100).Select(idx => new BsonDocument
             {
                 ["Key"] = $"source_{idx}",
-                ["Value"] = _fixture.Create<string>(),
+                ["Value"] = Fixture.Create<string>(),
             }));
             var (_, destinationCollection) = CreateConnection();
             var destValues = _sourceCollection.FindSync(new BsonDocument()).ToList().Select(document =>
@@ -167,7 +162,7 @@ namespace MongoTransit.IntegrationTests
             var finderMock = new Mock<IDestinationDocumentFinder>();
             await _sourceCollection.InsertManyAsync(Enumerable.Range(0, 100).Select(_ => new BsonDocument
             {
-                ["Value"] = _fixture.Create<string>(),
+                ["Value"] = Fixture.Create<string>(),
             }));
 
             // Act
@@ -203,7 +198,7 @@ namespace MongoTransit.IntegrationTests
             // Arrange
             await _sourceCollection.InsertManyAsync(Enumerable.Range(0, documents).Select(_ => new BsonDocument
             {
-                ["Value"] = _fixture.Create<string>(),
+                ["Value"] = Fixture.Create<string>(),
             }));
             
             // Act
@@ -285,14 +280,6 @@ namespace MongoTransit.IntegrationTests
 
         #endregion
 
-        public void Dispose()
-        {
-            foreach (var runner in _runners)
-            {
-                runner.Dispose();
-            }
-        }
-
         #region helpers
 
         private static async Task<List<BsonDocument>> ReadDocumentsFromChannelAsync(ChannelReader<List<ReplaceOneModel<BsonDocument>>> reader)
@@ -319,16 +306,6 @@ namespace MongoTransit.IntegrationTests
             return actual;
         }
         
-        private (MongoDbRunner runner, IMongoCollection<BsonDocument> collection) CreateConnection()
-        {
-            var runner = MongoDbRunner.Start();
-            var client = new MongoClient(runner.ConnectionString);
-            var database = client.GetDatabase("SourceRepositoryTest");
-            var collection = database.GetCollection<BsonDocument>("TestCollection");
-            _runners.Add(runner);
-            return (runner, collection);
-        }
-
         #endregion
     }
 }
