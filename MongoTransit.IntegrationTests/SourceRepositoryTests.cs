@@ -155,7 +155,88 @@ namespace MongoTransit.IntegrationTests
             var actualFilters = (await ReadReplacesFromChannelAsync(channel)).Select(model =>
                 model.Filter.Render(_sourceCollection.DocumentSerializer,
                     _sourceCollection.Settings.SerializerRegistry));
-            actualFilters.Should().OnlyContain(filter => filter["Key"].AsString.StartsWith("destination_"));
+            actualFilters.Should().OnlyContain(filter =>
+                filter["Key"].AsString.StartsWith("destination_") && filter.Names.Count() == 1);
+        }
+        
+        [Fact]
+        public async Task ReadDocumentsAsync_ShouldGetFilterWithId_EmptyKeys()
+        {
+            // Arrange
+            var channel = Channel.CreateUnbounded<List<ReplaceOneModel<BsonDocument>>>();
+            var finderMock = new Mock<IDestinationDocumentFinder>();
+            await _sourceCollection.InsertManyAsync(Enumerable.Range(0, 100).Select(_ => new BsonDocument
+            {
+                ["Value"] = _fixture.Create<string>(),
+            }));
+
+            // Act
+            await _sut.ReadDocumentsAsync(new BsonDocument(), channel, 10, false, Array.Empty<string>(),
+                false, finderMock.Object, CancellationToken.None);
+
+            // Assert
+            var actualFilters = (await ReadReplacesFromChannelAsync(channel)).Select(model =>
+                model.Filter.Render(_sourceCollection.DocumentSerializer,
+                    _sourceCollection.Settings.SerializerRegistry));
+            actualFilters.Should().OnlyContain(filter => filter.Names.First() == "_id" && filter.Names.Count() == 1);
+        }
+
+        #endregion
+
+        #region CountLagAsync
+
+        [Fact]
+        public async Task CountLagAsync_ShouldReturnZero_EmptyCollection()
+        {
+            // Act
+            var actual = await _sut.CountLagAsync(new BsonDocument(), CancellationToken.None);
+
+            // Assert
+            actual.Should().Be(0);
+        }
+        
+        [Fact]
+        public async Task CountLagAsync_ShouldReturnZero_NoMatchingDocuments()
+        {
+            // Arrange
+            var currentDate = DateTime.UtcNow;
+            await _sourceCollection.InsertOneAsync(new BsonDocument
+            {
+                ["Value"] = new BsonDateTime(currentDate)
+            });
+            
+            // Act
+            var actual = await _sut.CountLagAsync(new BsonDocument
+            {
+                ["Value"] = new BsonDocument("$gt", new BsonDateTime(currentDate))
+            }, CancellationToken.None);
+
+            // Assert
+            actual.Should().Be(0);
+        }
+        
+        [Fact]
+        public async Task CountLagAsync_ShouldReturnNumberOfMatchingDocuments_FilterDefined()
+        {
+            // Arrange
+            var currentDate = DateTime.UtcNow;
+            await _sourceCollection.InsertOneAsync(new BsonDocument
+            {
+                ["Value"] = new BsonDateTime(currentDate.AddMinutes(-1))
+            });
+            await _sourceCollection.InsertOneAsync(new BsonDocument
+            {
+                ["Value"] = new BsonDateTime(currentDate)
+            });
+            
+            // Act
+            var actual = await _sut.CountLagAsync(new BsonDocument
+            {
+                ["Value"] = new BsonDocument("$gte", new BsonDateTime(currentDate))
+            }, CancellationToken.None);
+
+            // Assert
+            actual.Should().Be(1);
         }
 
         #endregion
