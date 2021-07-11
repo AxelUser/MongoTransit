@@ -21,9 +21,9 @@ namespace MongoTransit.Storage.Destination
             _logger = logger;
         }
 
-        public async Task ReplaceManyAsync(List<ReplaceOneModel<BsonDocument>> replacements, CancellationToken token)
+        public async Task ReplaceManyAsync(List<ReplaceOneModel<BsonDocument>>? replacements, CancellationToken token)
         {
-            if (!replacements.Any())
+            if (replacements == null || !replacements.Any())
             {
                 _logger.Debug("Empty bulk, skipping");
                 return;
