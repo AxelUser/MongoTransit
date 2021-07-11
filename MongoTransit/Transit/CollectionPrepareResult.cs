@@ -1,6 +1,6 @@
-﻿using MongoDB.Bson;
+﻿using MongoTransit.Storage.Source;
 
 namespace MongoTransit.Transit
 {
-    public record CollectionPrepareResult(BsonDocument Filter, long Count);
+    public record CollectionPrepareResult(SourceFilter Filter, long Count);
 }

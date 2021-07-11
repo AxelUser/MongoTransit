@@ -50,7 +50,7 @@ namespace MongoTransit.IntegrationTests
             }));
 
             // Act
-            await _sut.ReadDocumentsAsync(new BsonDocument(), channel, 10, false, Array.Empty<string>(),
+            await _sut.ReadDocumentsAsync(SourceFilter.Empty, channel, 10, false, Array.Empty<string>(),
                 false, finderMock.Object, CancellationToken.None);
 
             // Assert
@@ -70,7 +70,7 @@ namespace MongoTransit.IntegrationTests
             {
                 ["Modified"] = new BsonDateTime(currentDate.AddMinutes(idx))
             }));
-            var filerByDate = new BsonDocument("Modified", new BsonDateTime(currentDate.AddMinutes(50)));
+            var filerByDate = new SourceFilter("Modified", currentDate.AddMinutes(50));
 
             // Act
             await _sut.ReadDocumentsAsync(filerByDate, channel, 10, false, Array.Empty<string>(),
@@ -78,7 +78,7 @@ namespace MongoTransit.IntegrationTests
             
             // Assert
             var actual = await ReadDocumentsFromChannelAsync(channel);
-            var existing = _sourceCollection.Find(filerByDate).ToList();
+            var existing = _sourceCollection.Find(filerByDate.ToBsonDocument()).ToList();
             actual.Should().BeEquivalentTo(existing);
         }
         
@@ -97,7 +97,7 @@ namespace MongoTransit.IntegrationTests
             }));
 
             // Act
-            await _sut.ReadDocumentsAsync(new BsonDocument(), channel, batchSize, false, Array.Empty<string>(),
+            await _sut.ReadDocumentsAsync(SourceFilter.Empty, channel, batchSize, false, Array.Empty<string>(),
                 false, finderMock.Object, CancellationToken.None);
 
             // Assert
@@ -120,7 +120,7 @@ namespace MongoTransit.IntegrationTests
             }));
             
             // Act
-            await _sut.ReadDocumentsAsync(new BsonDocument(), channel, 10, false, Array.Empty<string>(),
+            await _sut.ReadDocumentsAsync(SourceFilter.Empty, channel, 10, false, Array.Empty<string>(),
                 false, finderMock.Object, CancellationToken.None);
             
             // Assert
@@ -148,7 +148,7 @@ namespace MongoTransit.IntegrationTests
             var finder = new DestinationRepository(destinationCollection, new Mock<ILogger>().Object);
 
             // Act
-            await _sut.ReadDocumentsAsync(new BsonDocument(), channel, 10, true, new[] { "Key" },
+            await _sut.ReadDocumentsAsync(SourceFilter.Empty, channel, 10, true, new[] { "Key" },
                 false, finder, CancellationToken.None);
             
             // Assert
@@ -171,7 +171,7 @@ namespace MongoTransit.IntegrationTests
             }));
 
             // Act
-            await _sut.ReadDocumentsAsync(new BsonDocument(), channel, 10, false, Array.Empty<string>(),
+            await _sut.ReadDocumentsAsync(SourceFilter.Empty, channel, 10, false, Array.Empty<string>(),
                 false, finderMock.Object, CancellationToken.None);
 
             // Assert
@@ -183,60 +183,104 @@ namespace MongoTransit.IntegrationTests
 
         #endregion
 
+        #region CountAllAsync
+
+        [Fact]
+        public async Task CountAllAsync_ShouldReturnZero_EmptyCollection()
+        {
+            // Act
+            var actual = await _sut.CountAllAsync(CancellationToken.None);
+
+            // Assert
+            actual.Should().Be(0);
+        }
+        
+        [Theory]
+        [InlineData(1)]
+        [InlineData(10)]
+        public async Task CountAllAsync_ShouldReturnNumberOfDocumentsInCollection_CollectionIsNotEmpty(int documents)
+        {
+            // Arrange
+            await _sourceCollection.InsertManyAsync(Enumerable.Range(0, documents).Select(_ => new BsonDocument
+            {
+                ["Value"] = _fixture.Create<string>(),
+            }));
+            
+            // Act
+            var actual = await _sut.CountAllAsync(CancellationToken.None);
+
+            // Assert
+            actual.Should().Be(documents);
+        }
+
+        #endregion
+        
         #region CountLagAsync
 
         [Fact]
         public async Task CountLagAsync_ShouldReturnZero_EmptyCollection()
         {
             // Act
-            var actual = await _sut.CountLagAsync(new BsonDocument(), CancellationToken.None);
+            var actual = await _sut.CountLagAsync(new SourceFilter("Modified", DateTime.UtcNow), CancellationToken.None);
 
             // Assert
             actual.Should().Be(0);
         }
         
-        [Fact]
-        public async Task CountLagAsync_ShouldReturnZero_NoMatchingDocuments()
+        [Theory]
+        [InlineData(1)]
+        [InlineData(10)]
+        public async Task CountLagAsync_ShouldReturnAtLeastOverlappingCount_CheckpointValueIsEqualsToLastKnownFieldValue(int elementsWithMaxCheckpointFieldValue)
         {
             // Arrange
-            var currentDate = DateTime.UtcNow;
+            var lastCheckpoint = DateTime.UtcNow;
             await _sourceCollection.InsertOneAsync(new BsonDocument
             {
-                ["Value"] = new BsonDateTime(currentDate)
+                ["Modified"] = new BsonDateTime(lastCheckpoint.AddMinutes(-1))
             });
+
+            await _sourceCollection.InsertManyAsync(Enumerable.Range(0, elementsWithMaxCheckpointFieldValue)
+                .Select(_ => new BsonDocument
+                {
+                    ["Modified"] = new BsonDateTime(lastCheckpoint)
+                }));
             
             // Act
-            var actual = await _sut.CountLagAsync(new BsonDocument
-            {
-                ["Value"] = new BsonDocument("$gt", new BsonDateTime(currentDate))
-            }, CancellationToken.None);
+            var actual = await _sut.CountLagAsync(new SourceFilter("Modified", lastCheckpoint), CancellationToken.None);
 
             // Assert
-            actual.Should().Be(0);
+            actual.Should().Be(elementsWithMaxCheckpointFieldValue);
         }
         
-        [Fact]
-        public async Task CountLagAsync_ShouldReturnNumberOfMatchingDocuments_FilterDefined()
+        [Theory]
+        [InlineData(1)]
+        [InlineData(10)]
+        public async Task CountLagAsync_ShouldReturnNumberOfDocumentsGteThanCheckpoint_CheckpointValueIsLessThanMaximumAvailable(int documentsAfterCheckpoint)
         {
             // Arrange
-            var currentDate = DateTime.UtcNow;
-            await _sourceCollection.InsertOneAsync(new BsonDocument
+            var lastCheckpoint = DateTime.UtcNow;
+            await _sourceCollection.InsertManyAsync(new []
             {
-                ["Value"] = new BsonDateTime(currentDate.AddMinutes(-1))
+                new BsonDocument
+                {
+                    ["Modified"] = new BsonDateTime(lastCheckpoint.AddMinutes(-1))
+                },
+                new BsonDocument
+                {
+                    ["Modified"] = new BsonDateTime(lastCheckpoint)
+                },
             });
-            await _sourceCollection.InsertOneAsync(new BsonDocument
-            {
-                ["Value"] = new BsonDateTime(currentDate)
-            });
-            
+            await _sourceCollection.InsertManyAsync(Enumerable.Range(1, documentsAfterCheckpoint).Select(
+                minutesOffset => new BsonDocument
+                {
+                    ["Modified"] = new BsonDateTime(lastCheckpoint.AddMinutes(minutesOffset))
+                }));
+
             // Act
-            var actual = await _sut.CountLagAsync(new BsonDocument
-            {
-                ["Value"] = new BsonDocument("$gte", new BsonDateTime(currentDate))
-            }, CancellationToken.None);
+            var actual = await _sut.CountLagAsync(new SourceFilter("Modified", lastCheckpoint), CancellationToken.None);
 
             // Assert
-            actual.Should().Be(1);
+            actual.Should().Be(documentsAfterCheckpoint + 1);
         }
 
         #endregion

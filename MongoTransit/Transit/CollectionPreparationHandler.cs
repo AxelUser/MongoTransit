@@ -1,7 +1,5 @@
-﻿using System;
-using System.Threading;
+﻿using System.Threading;
 using System.Threading.Tasks;
-using MongoDB.Bson;
 using MongoTransit.Options;
 using MongoTransit.Progress;
 using MongoTransit.Storage.Destination;
@@ -47,9 +45,8 @@ namespace MongoTransit.Transit
             progress.Status = "Removing documents from destination...";
             await _destination.DeleteAllDocumentsAsync(token);
             progress.Status = "Counting documents...";
-            var filter = new BsonDocument();
-            var count = await _source.CountLagAsync(filter, token);
-            return new CollectionPrepareResult(filter, count);
+            var count = await _source.CountAllAsync(token);
+            return new CollectionPrepareResult(SourceFilter.Empty, count);
         }
 
         private async Task<CollectionPrepareResult> CheckIterativeCollectionAsync(TextStatusProvider progress, IterativeTransitOptions iterOpts, CancellationToken token)
@@ -67,7 +64,7 @@ namespace MongoTransit.Transit
             return new CollectionPrepareResult(filter, count);
         }
 
-        private async Task<BsonDocument> CreateIterativeFilterAsync(IterativeTransitOptions iterOpts, CancellationToken token)
+        private async Task<SourceFilter> CreateIterativeFilterAsync(IterativeTransitOptions iterOpts, CancellationToken token)
         {
             var (checkpointField, offset, forcedCheckpoint) = iterOpts;
 
@@ -75,7 +72,7 @@ namespace MongoTransit.Transit
             {
                 _logger.Information("Forced to use checkpoint {ForcedCheckpoint} for collection {Collection}",
                     iterOpts.ForcedCheckpoint, _collectionName);
-                return CreateFilterModel(iterOpts.ForcedCheckpoint);
+                return new SourceFilter(checkpointField, iterOpts.ForcedCheckpoint);
             }
 
             _logger.Debug("Fetching last checkpoint for collection {Collection}", _collectionName);
@@ -91,18 +88,8 @@ namespace MongoTransit.Transit
             {
                 _logger.Warning("Collection {Collection} doesn't have checkpoint", _collectionName);
             }
-                
-            return CreateFilterModel(lastCheckpoint);
 
-            BsonDocument CreateFilterModel(DateTime? checkpointValue)
-            {
-                return checkpointValue != null
-                    ? new BsonDocument(checkpointField, new BsonDocument("$gte", checkpointValue.Value))
-                    : new BsonDocument
-                    {
-                        [checkpointField] = new BsonDocument("$ne", BsonNull.Value)
-                    };
-            }
+            return new SourceFilter(checkpointField, lastCheckpoint);
         }
     }
 }

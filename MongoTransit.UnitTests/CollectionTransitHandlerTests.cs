@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -67,13 +66,13 @@ namespace MongoTransit.UnitTests
             // Arrange
             _collectionPrepareMock.Setup(handler => handler.PrepareCollectionAsync(It.IsAny<IterativeTransitOptions?>(),
                 It.IsAny<TextStatusProvider>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new CollectionPrepareResult(new BsonDocument(), 0));
+                .ReturnsAsync(new CollectionPrepareResult(SourceFilter.Empty, 0));
             
             // Act
             await _handler.TransitAsync(false, default);
             
             // Assert
-            _sourceMock.Verify(repository => repository.ReadDocumentsAsync(It.IsAny<BsonDocument>(),
+            _sourceMock.Verify(repository => repository.ReadDocumentsAsync(It.IsAny<SourceFilter>(),
                 It.IsAny<ChannelWriter<List<ReplaceOneModel<BsonDocument>>>>(), It.IsAny<int>(), It.IsAny<bool>(),
                 It.IsAny<string[]>(), It.IsAny<bool>(), It.IsAny<IDestinationDocumentFinder>(), It.IsAny<CancellationToken>()), Times.Never);
         }
@@ -82,17 +81,16 @@ namespace MongoTransit.UnitTests
         public async Task TransitAsync_ShouldCompletedWithAllStepsOfRestore_CollectionHasLag(TransferResults expectedResults)
         {
             // Arrange
-            var filter = new BsonDocument("_id", _fixture.Create<Guid>());
             _collectionPrepareMock.Setup(handler => handler.PrepareCollectionAsync(It.IsAny<IterativeTransitOptions?>(),
                     It.IsAny<TextStatusProvider>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new CollectionPrepareResult(filter, 100));
+                .ReturnsAsync(new CollectionPrepareResult(SourceFilter.Empty, 100));
             _workerPoolMock.Setup(pool => pool.WriteAsync(It.IsAny<CancellationToken>())).ReturnsAsync(expectedResults);
             
             // Act
             await _handler.TransitAsync(false, default);
             
             // Assert
-            _sourceMock.Verify(repository => repository.ReadDocumentsAsync(filter,
+            _sourceMock.Verify(repository => repository.ReadDocumentsAsync(SourceFilter.Empty,
                 It.IsAny<ChannelWriter<List<ReplaceOneModel<BsonDocument>>>>(), It.IsAny<int>(), It.IsAny<bool>(),
                 It.IsAny<string[]>(), It.IsAny<bool>(), It.IsAny<IDestinationDocumentFinder>(), It.IsAny<CancellationToken>()));
             _workerPoolMock.Verify(pool => pool.WriteAsync(It.IsAny<CancellationToken>()));

@@ -9,15 +9,17 @@ namespace MongoTransit.Storage.Source
 {
     public interface ISourceRepository
     {
-        Task ReadDocumentsAsync(BsonDocument filter,
+        Task ReadDocumentsAsync(SourceFilter filter,
             ChannelWriter<List<ReplaceOneModel<BsonDocument>>> batchWriter,
             int batchSize,
             bool fetchKeyFromDestination,
             string[] keyFields,
             bool upsert,
             IDestinationDocumentFinder documentFinder,
-            CancellationToken token);
+            CancellationToken token = default);
 
-        Task<long> CountLagAsync(BsonDocument filter, CancellationToken token);
+        Task<long> CountLagAsync(SourceFilter filter, CancellationToken token);
+        
+        Task<long> CountAllAsync(CancellationToken token);
     }
 }
