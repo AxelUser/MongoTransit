@@ -187,5 +187,43 @@ namespace MongoTransit.IntegrationTests
         }
 
         #endregion
+
+        #region DeleteAllDocumentsAsync
+
+        [Fact]
+        public async Task DeleteAllDocumentsAsync_ShouldNotDoAnyDeletions_CollectionIsEmpty()
+        {
+            // Arrange
+            var existing = _destCollection.FindSync(FilterDefinition<BsonDocument>.Empty).ToList();
+            
+            // Act
+            await _sut.DeleteAllDocumentsAsync(CancellationToken.None);
+            
+            // Assert
+            var afterDeletion = _destCollection.FindSync(FilterDefinition<BsonDocument>.Empty).ToList();
+            afterDeletion.Should().BeEmpty().And.BeEquivalentTo(existing);
+        }
+        
+        [Fact]
+        public async Task DeleteAllDocumentsAsync_ShouldDeleteAllDocuments_CollectionHasDocuments()
+        {
+            // Arrange
+            await _destCollection.InsertManyAsync(Enumerable.Range(0, 10)
+                .Select(_ => new BsonDocument
+                {
+                    ["Value"] = Fixture.Create<string>()
+                }));
+            var beforeDeletion = _destCollection.FindSync(FilterDefinition<BsonDocument>.Empty).ToList();
+            
+            // Act
+            await _sut.DeleteAllDocumentsAsync(CancellationToken.None);
+            
+            // Assert
+            var afterDeletion = _destCollection.FindSync(FilterDefinition<BsonDocument>.Empty).ToList();
+            beforeDeletion.Should().NotBeEmpty();
+            afterDeletion.Should().BeEmpty();
+        }
+
+        #endregion
     }
 }
