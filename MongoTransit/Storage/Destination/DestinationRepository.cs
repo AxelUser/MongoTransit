@@ -42,17 +42,20 @@ namespace MongoTransit.Storage.Destination
                 replacements.Count, sw.ElapsedMilliseconds);
         }
 
-        public async Task RetryReplaceAsync(FilterDefinition<BsonDocument> filter, BsonDocument replacement, CancellationToken token)
+        public async Task ReplaceDocumentAsync(FilterDefinition<BsonDocument> filter, BsonDocument replacement, CancellationToken token)
         {
             var sw = new Stopwatch();
             sw.Start();
-            await _collection.ReplaceOneAsync(filter, replacement, new ReplaceOptions
+            var result = await _collection.ReplaceOneAsync(filter, replacement, new ReplaceOptions
             {
                 BypassDocumentValidation = true
             }, token);
             sw.Stop();
 
-            _logger.Debug("Successfully retried replacement of document (ID: {Id}) in {Elapsed:N1} ms",
+            _logger.Debug(
+                result.ModifiedCount == 1
+                    ? "Successfully retried replacement of document (ID: {Id}) in {Elapsed:N1} ms"
+                    : "Failed replacement of document (ID: {Id}) in {Elapsed:N1} ms. Document is missing",
                 replacement["_id"], sw.ElapsedMilliseconds);
         }
 

@@ -173,7 +173,7 @@ namespace MongoTransit.Workers
                 {
                     if (!_dryRun)
                     {
-                        await repository.RetryReplaceAsync(failedReplace.Filter, failedReplace.Replacement, token);
+                        await repository.ReplaceDocumentAsync(failedReplace.Filter, failedReplace.Replacement, token);
 
                         totalProcessed++;
                     }

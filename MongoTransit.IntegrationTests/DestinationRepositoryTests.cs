@@ -122,7 +122,7 @@ namespace MongoTransit.IntegrationTests
                 }).ToList();
             var replaceModels = replacements
                 .Select(document =>
-                    new ReplaceOneModel<BsonDocument>(new BsonDocument("_id", document["_id"]), document))
+                    new ReplaceOneModel<BsonDocument>(document.GetFilterBy("_id"), document))
                 .ToList();
             
             // Act
@@ -150,7 +150,7 @@ namespace MongoTransit.IntegrationTests
                 }).ToList();
             var replaceModels = replacements
                 .Select(document =>
-                    new ReplaceOneModel<BsonDocument>(new BsonDocument("Key", document["Key"]), document))
+                    new ReplaceOneModel<BsonDocument>(document.GetFilterBy("Key"), document))
                 .ToList();
             
             // Act
@@ -172,7 +172,7 @@ namespace MongoTransit.IntegrationTests
                 }).ToList();
             var replaceModels = newDocuments
                 .Select(document =>
-                    new ReplaceOneModel<BsonDocument>(new BsonDocument("_id", document["_id"]), document)
+                    new ReplaceOneModel<BsonDocument>(document.GetFilterBy("_id"), document)
                     {
                         IsUpsert = true
                     })
@@ -222,6 +222,58 @@ namespace MongoTransit.IntegrationTests
             var afterDeletion = _destCollection.FindSync(FilterDefinition<BsonDocument>.Empty).ToList();
             beforeDeletion.Should().NotBeEmpty();
             afterDeletion.Should().BeEmpty();
+        }
+
+        #endregion
+
+        #region ReplaceDocumentAsync
+
+        [Fact]
+        public async Task ReplaceDocumentAsync_ShouldReplaceDocument_CollectionHasOriginalDocument()
+        {
+            // Arrange
+            var inserted = new BsonDocument
+            {
+                ["Value"] = Fixture.Create<string>()
+            };
+            
+            await _destCollection.InsertOneAsync(inserted);
+
+            // Act
+            var replacement = new BsonDocument
+            {
+                ["_id"] = inserted["_id"],
+                ["Value"] = "replaced"
+            };
+            await _sut.ReplaceDocumentAsync(inserted.GetFilterBy("_id"), replacement, CancellationToken.None);
+            
+            // Assert
+            var afterReplace = _destCollection.FindSync(FilterDefinition<BsonDocument>.Empty).ToList();
+            afterReplace.Should().BeEquivalentTo(new[] { replacement });
+        }
+        
+        [Fact]
+        public async Task ReplaceDocumentAsync_ShouldNotReplaceOrInsertDocument_CollectionMissingOriginalDocument()
+        {
+            // Arrange
+            var inserted = new BsonDocument
+            {
+                ["_id"] = "exist",
+                ["Value"] = Fixture.Create<string>()
+            };
+            
+            await _destCollection.InsertOneAsync(inserted);
+
+            // Act
+            await _sut.ReplaceDocumentAsync(new BsonDocument("_id", "not_exist"), new BsonDocument
+            {
+                ["_id"] = "not_exist",
+                ["Value"] = Fixture.Create<string>()
+            }, CancellationToken.None);
+            
+            // Assert
+            var afterReplace = _destCollection.FindSync(FilterDefinition<BsonDocument>.Empty).ToList();
+            afterReplace.Should().BeEquivalentTo(new[] { inserted });
         }
 
         #endregion
