@@ -1,6 +1,6 @@
 using MongoDB.Bson;
 
-namespace MongoTransit.IntegrationTests.Extensions
+namespace MongoTransit.Extensions
 {
     public static class BsonDocumentExtensions
     {

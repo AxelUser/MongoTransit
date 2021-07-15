@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using MongoTransit.Extensions;
 using Serilog;
 
 namespace MongoTransit.Storage.Destination
@@ -98,7 +99,7 @@ namespace MongoTransit.Storage.Destination
 
         public async Task<BsonDocument> FindDocumentAsync(BsonDocument document, CancellationToken token)
         {
-            var cursor = await _collection.FindAsync(new BsonDocument("_id", document["_id"]),
+            var cursor = await _collection.FindAsync( document.GetFilterBy("_id"),
                 cancellationToken: token);
             return await cursor.SingleOrDefaultAsync(token);
         }

@@ -7,6 +7,7 @@ using AutoFixture;
 using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using MongoTransit.Extensions;
 using MongoTransit.IntegrationTests.Extensions;
 using MongoTransit.Storage.Destination;
 using Moq;
@@ -274,6 +275,89 @@ namespace MongoTransit.IntegrationTests
             // Assert
             var afterReplace = _destCollection.FindSync(FilterDefinition<BsonDocument>.Empty).ToList();
             afterReplace.Should().BeEquivalentTo(new[] { inserted });
+        }
+
+        #endregion
+
+        #region FindDocumentAsync
+
+        [Fact]
+        public async Task FindDocumentAsync_ShouldReturnNull_EmptyCollection()
+        {
+            // Act
+            var actual = await _sut.FindDocumentAsync(new BsonDocument
+            {
+                ["_id"] = Fixture.Create<string>(),
+                ["Value"] = Fixture.Create<string>(),
+            }, CancellationToken.None);
+
+            // Assert
+            actual.Should().BeNull();
+        }
+        
+        [Fact]
+        public async Task FindDocumentAsync_ShouldReturnNull_MissingDocument()
+        {
+            // Arrange
+            await _destCollection.InsertOneAsync(new BsonDocument
+            {
+                ["_id"] = Fixture.Create<string>(),
+                ["Value"] = Fixture.Create<string>(),
+            });
+            
+            // Act
+            var actual = await _sut.FindDocumentAsync(new BsonDocument
+            {
+                ["_id"] = Fixture.Create<string>(),
+                ["Value"] = Fixture.Create<string>(),
+            }, CancellationToken.None);
+
+            // Assert
+            actual.Should().BeNull();
+        }
+        
+        [Fact]
+        public async Task FindDocumentAsync_ShouldReturnDocument_CollectionHasSameDocument()
+        {
+            // Arrange
+            var target = new BsonDocument
+            {
+                ["Value"] = Fixture.Create<string>(),
+            };
+            await _destCollection.InsertManyAsync(Enumerable.Range(0, 10).Select(_ => new BsonDocument
+            {
+                ["Value"] = Fixture.Create<string>()
+            }).Append(target));
+            
+            // Act
+            var actual = await _sut.FindDocumentAsync(target, CancellationToken.None);
+
+            // Assert
+            actual.Should().BeEquivalentTo(target);
+        }
+        
+        [Fact]
+        public async Task FindDocumentAsync_ShouldReturnDocumentWithSameId_CollectionHasDocumentWithId()
+        {
+            // Arrange
+            var target = new BsonDocument
+            {
+                ["Value"] = Fixture.Create<string>(),
+            };
+            await _destCollection.InsertManyAsync(Enumerable.Range(0, 10).Select(_ => new BsonDocument
+            {
+                ["Value"] = Fixture.Create<string>()
+            }).Append(target));
+            
+            // Act
+            var actual = await _sut.FindDocumentAsync(new BsonDocument
+            {
+                ["_id"] = target["_id"],
+                ["Value"] = Fixture.Create<string>(),
+            }, CancellationToken.None);
+
+            // Assert
+            actual.Should().BeEquivalentTo(target);
         }
 
         #endregion
