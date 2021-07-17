@@ -16,7 +16,7 @@ namespace MongoTransit.Transit
         public static async Task RunAsync(ILogger logger, CollectionTransitOptions[] options,
             IEnumerable<int> cyclesIterator, bool dryRun, TimeSpan notificationInterval, CancellationToken token)
         {
-            var handlers = new CollectionTransitHandler?[options.Length];
+            var handlers = new ICollectionTransitHandler?[options.Length];
             var operations = new Task[options.Length];
 
             var progressNotification = StartNotifier(logger, notificationInterval);
@@ -59,7 +59,7 @@ namespace MongoTransit.Transit
             }
         }
 
-        private static CollectionTransitHandler CreateCollectionHandler(CollectionTransitOptions currentOptions,
+        private static ICollectionTransitHandler CreateCollectionHandler(CollectionTransitOptions currentOptions,
             NotificationLoop progressNotification, ILogger logger)
         {
             var collectionLogger = logger.ForContext("Scope", currentOptions.Collection);

@@ -15,7 +15,7 @@ using Serilog;
 
 namespace MongoTransit.Transit
 {
-    public class CollectionTransitHandler
+    public class CollectionTransitHandler : ICollectionTransitHandler
     {
         private readonly IProgressManager _manager;
         private readonly ILogger _logger;
