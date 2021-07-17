@@ -168,7 +168,7 @@ namespace MongoTransit.IntegrationTests
             var newDocuments = Enumerable.Range(0, 10)
                 .Select(_ => new BsonDocument
                 {
-                    ["_id"] = Fixture.Create<Guid>(),
+                    ["_id"] = Fixture.Create<string>(),
                     ["Value"] = Fixture.Create<string>(),
                 }).ToList();
             var replaceModels = newDocuments
