@@ -50,7 +50,7 @@ namespace MongoTransit.Transit
             var swTransit = new Stopwatch();
             swTransit.Start();
 
-            var status = new TextStatusProvider("Checking...");
+            var status = new TextStatusNotifier("Checking...");
             _manager.Attach(_options.Collection, status);
             try
             {
@@ -64,7 +64,7 @@ namespace MongoTransit.Transit
             }
         }
 
-        private async Task InternalTransit(bool dryRun, TextStatusProvider progress, CancellationToken token)
+        private async Task InternalTransit(bool dryRun, TextStatusNotifier progress, CancellationToken token)
         {
             var transitChannel = Channel.CreateBounded<List<ReplaceOneModel<BsonDocument>>>(_options.Workers);
 

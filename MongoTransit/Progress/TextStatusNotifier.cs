@@ -1,8 +1,8 @@
 ﻿namespace MongoTransit.Progress
 {
-    public class TextStatusProvider: ITextStatusNotifier
+    public class TextStatusNotifier: ITextStatusNotifier
     {
-        public TextStatusProvider(string initialStatus)
+        public TextStatusNotifier(string initialStatus)
         {
             Status = initialStatus;
         }

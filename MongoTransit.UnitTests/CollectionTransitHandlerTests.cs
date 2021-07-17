@@ -65,7 +65,7 @@ namespace MongoTransit.UnitTests
         {
             // Arrange
             _collectionPrepareMock.Setup(handler => handler.PrepareCollectionAsync(It.IsAny<IterativeTransitOptions?>(),
-                It.IsAny<TextStatusProvider>(), It.IsAny<CancellationToken>()))
+                It.IsAny<TextStatusNotifier>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new CollectionPrepareResult(SourceFilter.Empty, 0));
             
             // Act
@@ -82,7 +82,7 @@ namespace MongoTransit.UnitTests
         {
             // Arrange
             _collectionPrepareMock.Setup(handler => handler.PrepareCollectionAsync(It.IsAny<IterativeTransitOptions?>(),
-                    It.IsAny<TextStatusProvider>(), It.IsAny<CancellationToken>()))
+                    It.IsAny<TextStatusNotifier>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new CollectionPrepareResult(SourceFilter.Empty, 100));
             _workerPoolMock.Setup(pool => pool.WriteAsync(It.IsAny<CancellationToken>())).ReturnsAsync(expectedResults);
             
