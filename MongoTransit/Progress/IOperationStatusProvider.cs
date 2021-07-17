@@ -2,6 +2,6 @@
 {
     public interface IOperationStatusProvider
     {
-        string Status { get; }
+        public string Status { get; }
     }
 }

@@ -8,7 +8,7 @@ namespace MongoTransit.Transit
     public interface ICollectionPreparationHandler
     {
         Task<CollectionPrepareResult> PrepareCollectionAsync(IterativeTransitOptions? iterativeTransitOptions,
-            TextStatusProvider progress,
+            ITextStatusNotifier progress,
             CancellationToken token);
     }
 }

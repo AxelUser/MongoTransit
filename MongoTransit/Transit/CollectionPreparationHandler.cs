@@ -26,7 +26,7 @@ namespace MongoTransit.Transit
         
         public async Task<CollectionPrepareResult> PrepareCollectionAsync(
             IterativeTransitOptions? iterativeTransitOptions,
-            TextStatusProvider progress,
+            ITextStatusNotifier progress,
             CancellationToken token)
         {
             var sw = new Stopwatch();
@@ -39,7 +39,7 @@ namespace MongoTransit.Transit
             return result;
         }
 
-        private async Task<CollectionPrepareResult> CheckFullCollectionTransitAsync(TextStatusProvider progress, CancellationToken token)
+        private async Task<CollectionPrepareResult> CheckFullCollectionTransitAsync(ITextStatusNotifier progress, CancellationToken token)
         {
             _logger.Debug("Detected full transit for collection {Collection}", _collectionName);
             progress.Status = "Removing documents from destination...";
@@ -49,7 +49,7 @@ namespace MongoTransit.Transit
             return new CollectionPrepareResult(SourceFilter.Empty, count);
         }
 
-        private async Task<CollectionPrepareResult> CheckIterativeCollectionAsync(TextStatusProvider progress, IterativeTransitOptions iterOpts, CancellationToken token)
+        private async Task<CollectionPrepareResult> CheckIterativeCollectionAsync(ITextStatusNotifier progress, IterativeTransitOptions iterOpts, CancellationToken token)
         {
             _logger.Debug("Detected iterative transit for collection {Collection} with checkpoint field {Field}",
                 _collectionName, iterOpts.Field);
