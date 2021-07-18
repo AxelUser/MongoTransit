@@ -39,7 +39,7 @@ namespace MongoTransit.Workers
             _collectionName = collectionName;
         }
         
-        public async Task<(long processed, long totalRetried, long failed)> CreateWorker(
+        public async Task<(long processed, long totalRetried, long failed)> RunWorker(
             ChannelWriter<ReplaceOneModel<BsonDocument>> failedWrites, ILogger workerLogger,
             CancellationToken token)
         {
@@ -109,7 +109,7 @@ namespace MongoTransit.Workers
 
         }
 
-        public async Task<(long processed, long totalRetried, long failed)> CreateRetryWorker(
+        public async Task<(long processed, long totalRetried, long failed)> RunRetryWorker(
             ChannelReader<ReplaceOneModel<BsonDocument>> failedWrites, ILogger workerLogger,
             CancellationToken token)
         {

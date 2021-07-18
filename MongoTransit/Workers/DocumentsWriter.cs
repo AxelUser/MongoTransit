@@ -48,14 +48,14 @@ namespace MongoTransit.Workers
             for (var workerN = 0; workerN < _insertionWorkers.Length; workerN++)
             {
                 var workerLogger = _logger.ForContext("Scope", $"{_collectionName}-{workerN:00}");
-                _insertionWorkers[workerN] = _writeWorkerFactory.CreateWorker(_retriesChannel.Writer,
+                _insertionWorkers[workerN] = _writeWorkerFactory.RunWorker(_retriesChannel.Writer,
                     workerLogger, token);
             }
 
             for (var retryWorkerN = 0; retryWorkerN < _retryWorkers.Length; retryWorkerN++)
             {
                 var retryLogger = _logger.ForContext("Scope", $"{_collectionName}-Retry{retryWorkerN:00}");
-                _retryWorkers[retryWorkerN] = _writeWorkerFactory.CreateRetryWorker(_retriesChannel.Reader,
+                _retryWorkers[retryWorkerN] = _writeWorkerFactory.RunRetryWorker(_retriesChannel.Reader,
                     retryLogger, token);
             }
 
