@@ -1,6 +1,6 @@
 using System;
 
-namespace MongoTransit.IntegrationTests.Extensions
+namespace MongoTransit.UnitTests.Extensions
 {
     public static class DateTimeExtensions
     {
