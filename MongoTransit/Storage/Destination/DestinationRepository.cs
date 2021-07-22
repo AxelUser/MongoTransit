@@ -32,15 +32,36 @@ namespace MongoTransit.Storage.Destination
             
             var sw = new Stopwatch();
             sw.Start();
-            await _collection.BulkWriteAsync(replacements, new BulkWriteOptions
+            try
             {
-                IsOrdered = false,
-                BypassDocumentValidation = true
-            }, token);
-            sw.Stop();
-            
-            _logger.Debug("Processed bulk of {Count:N0} documents in {Elapsed:N1} ms",
-                replacements.Count, sw.ElapsedMilliseconds);
+                await _collection.BulkWriteAsync(replacements, new BulkWriteOptions
+                {
+                    IsOrdered = false,
+                    BypassDocumentValidation = true
+                }, token);
+                sw.Stop();
+
+                _logger.Debug("Successfully processed bulk of {Count:N0} documents in {Elapsed:N1} ms",
+                    replacements.Count, sw.ElapsedMilliseconds);
+            }
+            catch (MongoBulkWriteException<BsonDocument> bwe)
+            {
+                var errors = bwe.WriteErrors.Select(error => new ReplaceErrorInfo(error.Index, error.Message)).ToList();
+                _logger.Debug("Processed bulk of {Count:N0} documents with {Errors} errors in {Elapsed:N1} ms",
+                    replacements.Count, errors.Count, sw.ElapsedMilliseconds);
+                throw new ReplaceManyException(errors, bwe.Result.ProcessedRequests.Count);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception e)
+            {
+                _logger.Debug("Failed to process bulk of {Count:N0} documents errors in {Elapsed:N1} ms",
+                    replacements.Count, sw.ElapsedMilliseconds);
+                throw new ReplaceManyException(e);
+            }
+
         }
 
         public async Task ReplaceDocumentAsync(FilterDefinition<BsonDocument> filter, BsonDocument replacement, CancellationToken token)

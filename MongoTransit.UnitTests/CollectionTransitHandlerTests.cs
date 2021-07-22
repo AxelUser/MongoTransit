@@ -45,7 +45,7 @@ namespace MongoTransit.UnitTests
             _workerPoolMock = new Mock<IDocumentsWriter>();
             workerPoolFactoryMock.Setup(factory =>
                     factory.Create(It.IsAny<ChannelReader<List<ReplaceOneModel<BsonDocument>>>>(),
-                        It.IsAny<ProgressNotifier>(), It.IsAny<bool>(), It.IsAny<bool>()))
+                        It.IsAny<ProgressNotifier>(), It.IsAny<bool>()))
                 .Returns(_workerPoolMock.Object);
             
             var progressManagerMock = new Mock<IProgressManager>();

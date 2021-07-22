@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Channels;
@@ -14,38 +15,35 @@ namespace MongoTransit.Workers
 {
     public class WriteWorkerFactory : IWriteWorkerFactory
     {
-        private const string ErrorUpdateWithMoveToAnotherShard =
+        public const string ErrorUpdateWithMoveToAnotherShard =
             "Document shard key value updates that cause the doc to move shards must be sent with write batch of size 1";
 
         private readonly ChannelReader<List<ReplaceOneModel<BsonDocument>>> _batchReader;
         private readonly IDestinationRepositoryFactory _repositoryFactory;
         private readonly IProgressNotifier _notifier;
-        private readonly bool _upsert;
         private readonly bool _dryRun;
         private readonly string _collectionName;
 
         public WriteWorkerFactory(ChannelReader<List<ReplaceOneModel<BsonDocument>>> batchReader,
             IDestinationRepositoryFactory repositoryFactory,
             IProgressNotifier notifier,
-            bool upsert,
             bool dryRun,
             string collectionName)
         {
             _batchReader = batchReader;
             _repositoryFactory = repositoryFactory;
             _notifier = notifier;
-            _upsert = upsert;
             _dryRun = dryRun;
             _collectionName = collectionName;
         }
         
-        public async Task<(long processed, long totalRetried, long failed)> RunWorker(
+        public async Task<(long successful, long retryable, long failed)> RunWorker(
             ChannelWriter<ReplaceOneModel<BsonDocument>> failedWrites, ILogger workerLogger,
             CancellationToken token)
         {
             var repository = _repositoryFactory.Create(workerLogger);
-            var totalProcessed = 0L;
-            var totalRetried = 0L;
+            var totalSuccessful = 0L;
+            var totalRetryable = 0L;
             var totalFailed = 0L;
             
             await foreach (var batch in _batchReader.ReadAllAsync(token))
@@ -55,7 +53,7 @@ namespace MongoTransit.Workers
                     if (!_dryRun)
                     {
                         await repository.ReplaceManyAsync(batch, token);
-                        totalProcessed += batch.Count;
+                        totalSuccessful += batch.Count;
                     }
 
                     _notifier.Notify(batch.Count);
@@ -64,21 +62,21 @@ namespace MongoTransit.Workers
                 {
                     throw;
                 }
-                catch (MongoBulkWriteException<BsonDocument> bwe)
+                catch (ReplaceManyException rme) when(rme.Errors.Any())
                 {
-                    var retries = 0;
+                    var retryable = 0;
                     var fails = 0;
 
                     var errSb = new StringBuilder();
-                    foreach (var error in bwe.WriteErrors)
+                    foreach (var (index, message) in rme.Errors)
                     {
-                        var failedRequest = batch[error.Index];
-                        errSb.AppendLine($"(ID: {failedRequest.Replacement["_id"]}) {error.Message}");
-                        switch (error.Message)
+                        var failedRequest = batch[index];
+                        errSb.AppendLine($"(ID: {failedRequest.Replacement["_id"]}) {message}");
+                        switch (message)
                         {
                             case ErrorUpdateWithMoveToAnotherShard:
                                 await failedWrites.WriteAsync(failedRequest, token);
-                                retries++;
+                                retryable++;
                                 break;
                             default:
                                 fails++;
@@ -87,12 +85,12 @@ namespace MongoTransit.Workers
                     }
 
                     totalFailed += fails;
-                    totalRetried += retries;
-                    totalProcessed += bwe.Result.ProcessedRequests.Count - fails - retries;
+                    totalRetryable += retryable;
+                    totalSuccessful += rme.ProcessedCount - fails - retryable;
 
                     workerLogger.Error(
                         "{N:N0} documents failed to transfer, {R:N0} were sent to retry. Total batch: {B:N0}",
-                        fails, retries, batch.Count);
+                        fails, retryable, batch.Count);
                     workerLogger.Debug("Bulk write exception details:\n{Errors}", errSb.ToString());
                 }
                 catch (Exception e)
@@ -105,7 +103,7 @@ namespace MongoTransit.Workers
                 }
             } 
             
-            return (totalProcessed, totalRetried, totalFailed);
+            return (totalSuccessful, totalRetryable, totalFailed);
 
         }
 

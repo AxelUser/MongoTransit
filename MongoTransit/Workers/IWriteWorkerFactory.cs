@@ -9,7 +9,7 @@ namespace MongoTransit.Workers
 {
     public interface IWriteWorkerFactory
     {
-        Task<(long processed, long totalRetried, long failed)> RunWorker(
+        Task<(long successful, long retryable, long failed)> RunWorker(
             ChannelWriter<ReplaceOneModel<BsonDocument>> failedWrites,
             ILogger workerLogger,
             CancellationToken token);

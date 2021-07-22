@@ -30,9 +30,9 @@ namespace MongoTransit.Workers
         }
         
         public IDocumentsWriter Create(ChannelReader<List<ReplaceOneModel<BsonDocument>>> batchReader,
-            IProgressNotifier notifier, bool upsert, bool dryRun)
+            IProgressNotifier notifier, bool dryRun)
         {
-            var workerFactory = new WriteWorkerFactory(batchReader, _destinationRepositoryFactory, notifier, upsert,
+            var workerFactory = new WriteWorkerFactory(batchReader, _destinationRepositoryFactory, notifier,
                 dryRun, _collectionName);
             return new DocumentsWriter(_insertionWorkersCount, _retryWorkersCount, _collectionName,
                 workerFactory, _logger);

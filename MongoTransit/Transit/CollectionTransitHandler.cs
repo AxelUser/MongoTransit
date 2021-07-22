@@ -79,7 +79,7 @@ namespace MongoTransit.Transit
             var notifier = new ProgressNotifier(count);
             _manager.Attach(_options.Collection, notifier);
 
-            var writer = _documentsWriterFactory.Create(transitChannel, notifier, _options.Upsert, dryRun);
+            var writer = _documentsWriterFactory.Create(transitChannel, notifier, dryRun);
 
             var sw = new Stopwatch();
             sw.Start();
