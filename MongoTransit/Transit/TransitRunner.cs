@@ -21,43 +21,37 @@ namespace MongoTransit.Transit
             var operations = new Task[options.Length];
 
             var progressManager = new ProgressManager();
-            var progressNotification = StartNotificationLoop(progressManager, logger, notificationInterval);
-            try
+            await using var notification = new NotificationLoop(progressManager, logger, notificationInterval);
+            
+            foreach (var cycle in cyclesIterator)
             {
-                foreach (var cycle in cyclesIterator)
+                token.ThrowIfCancellationRequested();
+                
+                logger.Information("Transition iteration #{Number}", cycle);
+                
+                for (var idx = 0; idx < options.Length; idx++)
                 {
-                    token.ThrowIfCancellationRequested();
-                
-                    logger.Information("Transition iteration #{Number}", cycle);
-                
-                    for (var idx = 0; idx < options.Length; idx++)
+                    var currentOptions = options[idx];
+                        
+                    handlers[idx] = handlers[idx] == null ? CreateCollectionHandler(currentOptions, progressManager, logger) : handlers[idx];
+                    var handler = handlers[idx];
+                        
+                    operations[idx] = Task.Run(async () =>
                     {
-                        var currentOptions = options[idx];
-                        
-                        handlers[idx] = handlers[idx] == null ? CreateCollectionHandler(currentOptions, progressManager, logger) : handlers[idx];
-                        var handler = handlers[idx];
-                        
-                        operations[idx] = Task.Run(async () =>
+                        try
                         {
-                            try
-                            {
-                                await handler!.TransitAsync(dryRun, token);
-                            }
-                            catch (Exception e)
-                            {
-                                logger.Error(e, "Failed to transit collection {Collection}", currentOptions.Collection);
-                                throw;
-                            }
-                        }, token);
-                    }
-             
-                    logger.Information("Started {N} parallel transit operations", operations.Length);
-                    await Task.WhenAll(operations);
+                            await handler!.TransitAsync(dryRun, token);
+                        }
+                        catch (Exception e)
+                        {
+                            logger.Error(e, "Failed to transit collection {Collection}", currentOptions.Collection);
+                            throw;
+                        }
+                    }, token);
                 }
-            }
-            finally
-            {
-                await StopNotifier(progressNotification);
+             
+                logger.Information("Started {N} parallel transit operations", operations.Length);
+                await Task.WhenAll(operations);
             }
         }
 
@@ -82,48 +76,6 @@ namespace MongoTransit.Transit
                 workerPoolFactory, progressManager,
                 collectionLogger, currentOptions);
             return handler;
-        }
-
-        private record NotificationLoop(Task Loop, IProgressManager Manager, CancellationTokenSource Cancellation);
-
-        private static NotificationLoop StartNotificationLoop(IProgressManager manager, ILogger logger, TimeSpan delay)
-        {
-            var cts = new CancellationTokenSource();
-            var loop = Task.Run(async () =>
-            {
-                logger.Debug("Started notification loop");
-                try
-                {
-                    while (!cts.Token.IsCancellationRequested)
-                    {
-                        await Task.Delay(delay, cts.Token);
-                        if (manager.Available)
-                        {
-                            logger.Information("Progress report:\n{Progress}", manager.GetStatus());    
-                        }
-                    }
-                }
-                finally
-                {
-                    logger.Debug("Stopped notification loop");
-                }
-            }, cts.Token);
-
-            return new NotificationLoop(loop, manager, cts);
-        }
-
-        private static async Task StopNotifier(NotificationLoop loop)
-        {
-            var (task, _, cancellationTokenSource) = loop;
-            cancellationTokenSource.Cancel();
-            try
-            {
-                await task;
-            }
-            catch
-            {
-                // No matter what happened
-            }
         }
     }
 }
