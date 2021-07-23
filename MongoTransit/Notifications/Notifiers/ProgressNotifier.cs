@@ -1,6 +1,6 @@
 using System.Threading;
 
-namespace MongoTransit.Progress
+namespace MongoTransit.Notifications.Notifiers
 {
     public class ProgressNotifier: IOperationStatusProvider, IProgressNotifier
     {

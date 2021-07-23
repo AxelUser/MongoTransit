@@ -3,7 +3,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 
-namespace MongoTransit.Progress
+namespace MongoTransit.Notifications
 {
     public class ProgressManager : IProgressManager
     {

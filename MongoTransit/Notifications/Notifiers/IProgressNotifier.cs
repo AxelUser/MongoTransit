@@ -1,4 +1,4 @@
-﻿namespace MongoTransit.Progress
+﻿namespace MongoTransit.Notifications.Notifiers
 {
     public interface IProgressNotifier
     {

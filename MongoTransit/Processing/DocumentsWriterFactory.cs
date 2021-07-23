@@ -2,8 +2,9 @@
 using System.Threading.Channels;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using MongoTransit.Notifications;
+using MongoTransit.Notifications.Notifiers;
 using MongoTransit.Processing.Workers;
-using MongoTransit.Progress;
 using MongoTransit.Storage.Destination;
 using Serilog;
 

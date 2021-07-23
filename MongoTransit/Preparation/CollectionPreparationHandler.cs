@@ -1,7 +1,8 @@
 ﻿using System.Threading;
 using System.Threading.Tasks;
+using MongoTransit.Notifications;
+using MongoTransit.Notifications.Notifiers;
 using MongoTransit.Options;
-using MongoTransit.Progress;
 using MongoTransit.Storage.Destination;
 using MongoTransit.Storage.Source;
 using MongoTransit.Storage.Source.Models;
