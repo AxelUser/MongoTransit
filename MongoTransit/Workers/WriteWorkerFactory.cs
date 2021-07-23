@@ -64,6 +64,7 @@ namespace MongoTransit.Workers
                 }
                 catch (ReplaceManyException rme) when(rme.Errors.Any())
                 {
+                    // TODO: notify about processed documents besides occurred errors
                     var retryable = 0;
                     var fails = 0;
 
@@ -122,7 +123,7 @@ namespace MongoTransit.Workers
                 {
                     if (!_dryRun)
                     {
-                        await repository.ReplaceDocumentAsync(failedReplace.Filter, failedReplace.Replacement, token);
+                        await repository.ReplaceDocumentAsync(failedReplace, token);
 
                         totalProcessed++;
                     }

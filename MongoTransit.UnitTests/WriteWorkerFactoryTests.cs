@@ -56,7 +56,7 @@ namespace MongoTransit.UnitTests
             // Act
             var worker = _sut.RunWorker(Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>(), new Mock<ILogger>().Object,
                 CancellationToken.None);
-            await WriteBatchAndCloseChannelAsync(batch);
+            await WriteBatchAndCloseChannelAsync(_channel, batch);
             await worker;
             
             // Assert
@@ -78,7 +78,7 @@ namespace MongoTransit.UnitTests
             // Act
             var worker = _sut.RunWorker(Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>(), new Mock<ILogger>().Object,
                 CancellationToken.None);
-            await WriteBatchAndCloseChannelAsync(batch);
+            await WriteBatchAndCloseChannelAsync(_channel, batch);
             await worker;
             
             // Assert
@@ -99,7 +99,7 @@ namespace MongoTransit.UnitTests
             var batch = replacements.Select(d => new ReplaceOneModel<BsonDocument>(d.GetFilterBy("_id"), d)).ToList();
 
             // Act
-            await WriteBatchAndCloseChannelAsync(batch);
+            await WriteBatchAndCloseChannelAsync(_channel, batch);
             var actual = await _sut.RunWorker(Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>(), new Mock<ILogger>().Object,
                 CancellationToken.None);
 
@@ -126,7 +126,7 @@ namespace MongoTransit.UnitTests
                 .Throws(exception);
 
             // Act
-            await WriteBatchAndCloseChannelAsync(batch);
+            await WriteBatchAndCloseChannelAsync(_channel, batch);
             var (successful, _, failed) = await _sut.RunWorker(Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>(), new Mock<ILogger>().Object,
                 CancellationToken.None);
 
@@ -156,7 +156,7 @@ namespace MongoTransit.UnitTests
                 .Throws(exception);
 
             // Act
-            await WriteBatchAndCloseChannelAsync(batch);
+            await WriteBatchAndCloseChannelAsync(_channel, batch);
             var (successful, retryable, _) = await _sut.RunWorker(Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>(),
                 new Mock<ILogger>().Object,
                 CancellationToken.None);
@@ -188,7 +188,7 @@ namespace MongoTransit.UnitTests
             var retryChannel = Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>();
 
             // Act
-            await WriteBatchAndCloseChannelAsync(batch);
+            await WriteBatchAndCloseChannelAsync(_channel, batch);
             
             await _sut.RunWorker(retryChannel,
                 new Mock<ILogger>().Object,
@@ -214,7 +214,7 @@ namespace MongoTransit.UnitTests
             var batch = replacements.Select(d => new ReplaceOneModel<BsonDocument>(d.GetFilterBy("_id"), d)).ToList();
 
             // Act
-            await WriteBatchAndCloseChannelAsync(batch);
+            await WriteBatchAndCloseChannelAsync(_channel, batch);
             await _sut.RunWorker(Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>(), new Mock<ILogger>().Object,
                 CancellationToken.None);
 
@@ -247,12 +247,260 @@ namespace MongoTransit.UnitTests
 
         #endregion
 
+        #region RunRetryWorker
+
+        [Fact]
+        public async Task RunRetryWorker_ShouldProcessReplacements_ModelsAreSentToChannel()
+        {
+            // Arrange
+            var retries = Enumerable.Range(0, 10)
+                .Select(_ => new BsonDocument
+                {
+                    ["_id"] = _fixture.Create<string>(),
+                    ["Value"] = _fixture.Create<string>()
+                })
+                .Select(d => new ReplaceOneModel<BsonDocument>(d.GetFilterBy("_id"), d))
+                .ToArray();
+            
+            var retryChannel = Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>();
+
+            // Act
+            var worker = _sut.RunRetryWorker(retryChannel, new Mock<ILogger>().Object,
+                CancellationToken.None);
+            await WriteBatchAndCloseChannelAsync(retryChannel, retries);
+            await worker;
+            
+            // Assert
+            _destinationRepositoryMock.Verify(r => r.ReplaceDocumentAsync(It.IsIn(retries), It.IsAny<CancellationToken>()),
+                Times.Exactly(retries.Length));
+        }
+
+        [Fact]
+        public async Task RunRetryWorker_ShouldWaitUntilChannelIsClosed_ChannelIsMarkedAsCompleted()
+        {
+            // Arrange
+            var retries = Enumerable.Range(0, 10)
+                .Select(_ => new BsonDocument
+                {
+                    ["_id"] = _fixture.Create<string>(),
+                    ["Value"] = _fixture.Create<string>()
+                })
+                .Select(d => new ReplaceOneModel<BsonDocument>(d.GetFilterBy("_id"), d))
+                .ToArray();
+            
+            var retryChannel = Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>();
+
+            // Act
+            var worker = _sut.RunRetryWorker(retryChannel, new Mock<ILogger>().Object,
+                CancellationToken.None);
+            await WriteBatchAndCloseChannelAsync(retryChannel, retries);
+            await worker;
+            
+            // Assert
+            worker.Status.Should().Be(TaskStatus.RanToCompletion);
+        }
+        
+        [Theory]
+        [InlineData(10)]
+        [InlineData(100)]
+        public async Task RunRetryWorker_ShouldReturnCountOfReplacedDocuments_ReplacesAreProcessedWithoutErrors(int retriesCount)
+        {
+            // Arrange
+            var retries = Enumerable.Range(0, retriesCount)
+                .Select(_ => new BsonDocument
+                {
+                    ["_id"] = _fixture.Create<string>(),
+                    ["Value"] = _fixture.Create<string>()
+                })
+                .Select(d => new ReplaceOneModel<BsonDocument>(d.GetFilterBy("_id"), d))
+                .ToArray();
+            var retryChannel = Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>();
+
+            // Act
+            await WriteBatchAndCloseChannelAsync(retryChannel, retries);
+            var result = await _sut.RunRetryWorker(retryChannel, new Mock<ILogger>().Object,
+                CancellationToken.None);
+
+            // Assert
+            result.Successful.Should().Be(retriesCount);
+        }
+        
+        [Theory]
+        [InlineData(10)]
+        [InlineData(100)]
+        public async Task RunRetryWorker_ShouldReturnZeroOfSuccessfulDocumentsReplacements_ReplacesAreProcessedWithErrors(int retriesCount)
+        {
+            // Arrange
+            var retries = Enumerable.Range(0, retriesCount)
+                .Select(_ => new BsonDocument
+                {
+                    ["_id"] = _fixture.Create<string>(),
+                    ["Value"] = _fixture.Create<string>()
+                })
+                .Select(d => new ReplaceOneModel<BsonDocument>(d.GetFilterBy("_id"), d))
+                .ToArray();
+            var retryChannel = Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>();
+            _destinationRepositoryMock.Setup(r => r.ReplaceDocumentAsync(It.IsIn(retries), It.IsAny<CancellationToken>()))
+                .Throws(new ReplaceOneException("Error", new Exception("Inner")));
+
+            // Act
+            await WriteBatchAndCloseChannelAsync(retryChannel, retries);
+            var result = await _sut.RunRetryWorker(retryChannel, new Mock<ILogger>().Object,
+                CancellationToken.None);
+
+            // Assert
+            result.Successful.Should().Be(0);
+        }
+        
+        [Theory]
+        [InlineData(10)]
+        [InlineData(100)]
+        public async Task RunRetryWorker_ShouldReturnCountOfFailedDocumentsReplacements_ReplacesAreProcessedWithErrors(int retriesCount)
+        {
+            // Arrange
+            var retries = Enumerable.Range(0, retriesCount)
+                .Select(_ => new BsonDocument
+                {
+                    ["_id"] = _fixture.Create<string>(),
+                    ["Value"] = _fixture.Create<string>()
+                })
+                .Select(d => new ReplaceOneModel<BsonDocument>(d.GetFilterBy("_id"), d))
+                .ToArray();
+            var retryChannel = Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>();
+            _destinationRepositoryMock.Setup(r => r.ReplaceDocumentAsync(It.IsIn(retries), It.IsAny<CancellationToken>()))
+                .Throws(new ReplaceOneException("Error", new Exception("Inner")));
+
+            // Act
+            await WriteBatchAndCloseChannelAsync(retryChannel, retries);
+            var result = await _sut.RunRetryWorker(retryChannel, new Mock<ILogger>().Object,
+                CancellationToken.None);
+
+            // Assert
+            result.Failed.Should().Be(retriesCount);
+        }
+        
+        [Theory]
+        [InlineData(10)]
+        [InlineData(100)]
+        public async Task RunRetryWorker_ShouldReturnZeroOfRetryableDocumentsReplacements_ReplacesAreProcessedWithRetryableErrors(int retriesCount)
+        {
+            // Arrange
+            var retries = Enumerable.Range(0, retriesCount)
+                .Select(_ => new BsonDocument
+                {
+                    ["_id"] = _fixture.Create<string>(),
+                    ["Value"] = _fixture.Create<string>()
+                })
+                .Select(d => new ReplaceOneModel<BsonDocument>(d.GetFilterBy("_id"), d))
+                .ToArray();
+            var retryChannel = Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>();
+            _destinationRepositoryMock
+                .Setup(r => r.ReplaceDocumentAsync(It.IsIn(retries), It.IsAny<CancellationToken>()))
+                .Throws(new ReplaceOneException(WriteWorkerFactory.ErrorUpdateWithMoveToAnotherShard,
+                    new Exception(WriteWorkerFactory.ErrorUpdateWithMoveToAnotherShard)));
+
+            // Act
+            await WriteBatchAndCloseChannelAsync(retryChannel, retries);
+            var result = await _sut.RunRetryWorker(retryChannel,
+                new Mock<ILogger>().Object,
+                CancellationToken.None);
+
+            // Assert
+            result.Retryable.Should().Be(0);
+        }
+        
+        [Theory]
+        [InlineData(10)]
+        [InlineData(100)]
+        public async Task RunRetryWorker_ShouldReturnCountOfFailedDocumentsReplacementsAndZeroRetries_ReplacesAreProcessedWithRetryableErrors(int retriesCount)
+        {
+            // Arrange
+            var retries = Enumerable.Range(0, retriesCount)
+                .Select(_ => new BsonDocument
+                {
+                    ["_id"] = _fixture.Create<string>(),
+                    ["Value"] = _fixture.Create<string>()
+                })
+                .Select(d => new ReplaceOneModel<BsonDocument>(d.GetFilterBy("_id"), d))
+                .ToArray();
+            var retryChannel = Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>();
+            _destinationRepositoryMock
+                .Setup(r => r.ReplaceDocumentAsync(It.IsIn(retries), It.IsAny<CancellationToken>()))
+                .Throws(new ReplaceOneException(WriteWorkerFactory.ErrorUpdateWithMoveToAnotherShard,
+                    new Exception(WriteWorkerFactory.ErrorUpdateWithMoveToAnotherShard)));
+
+            // Act
+            await WriteBatchAndCloseChannelAsync(retryChannel, retries);
+            var result = await _sut.RunRetryWorker(retryChannel,
+                new Mock<ILogger>().Object,
+                CancellationToken.None);
+
+            // Assert
+            result.Failed.Should().Be(retriesCount);
+        }
+
+        [Theory]
+        [InlineData(10)]
+        [InlineData(100)]
+        public async Task RunRetryWorker_ShouldNotifyAboutReplacedDocuments_BatchIsHandledWithoutErrors(int retriesCount)
+        {
+            // Arrange
+            var retries = Enumerable.Range(0, retriesCount)
+                .Select(_ => new BsonDocument
+                {
+                    ["_id"] = _fixture.Create<string>(),
+                    ["Value"] = _fixture.Create<string>()
+                })
+                .Select(d => new ReplaceOneModel<BsonDocument>(d.GetFilterBy("_id"), d))
+                .ToArray();
+            var retryChannel = Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>();
+
+            // Act
+            await WriteBatchAndCloseChannelAsync(retryChannel, retries);
+            await _sut.RunRetryWorker(retryChannel, new Mock<ILogger>().Object,
+                CancellationToken.None);
+
+            // Assert
+            _notifierMock.Verify(notifier => notifier.Notify(1), Times.Exactly(retriesCount));
+        }
+        
+        [Fact]
+        public async Task RunRetryWorker_ShouldThrowCancellationException_ChannelIsOpenAndOperationIsCancelled()
+        {
+            // Arrange
+            var retry = new BsonDocument
+            {
+                ["_id"] = _fixture.Create<string>(),
+                ["Value"] = _fixture.Create<string>()
+            }; 
+            
+            var retryChannel = Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>();
+            var cts = new CancellationTokenSource();
+            await retryChannel.Writer.WriteAsync(new ReplaceOneModel<BsonDocument>(retry.GetFilterBy("_id"), retry),
+                CancellationToken.None);
+            var worker = _sut.RunRetryWorker(retryChannel, new Mock<ILogger>().Object,
+                cts.Token);
+
+            // Act
+            cts.Cancel();
+            
+            // Assert
+            Func<Task> act = async () => await worker;
+            await act.Should().ThrowAsync<OperationCanceledException>();
+        }
+
+        #endregion
+
         #region helpers
 
-        private async Task WriteBatchAndCloseChannelAsync(List<ReplaceOneModel<BsonDocument>> batch)
+        private static async Task WriteBatchAndCloseChannelAsync<T>(ChannelWriter<T> channel, params T[] messages)
         {
-            await _channel.Writer.WriteAsync(batch, CancellationToken.None);
-            _channel.Writer.Complete();
+            foreach (var message in messages)
+            {
+                await channel.WriteAsync(message, CancellationToken.None);                
+            }
+
+            channel.Complete();
         }
         
         private static async Task<List<ReplaceOneModel<BsonDocument>>> ReadModelsFromChannelAsync(ChannelReader<ReplaceOneModel<BsonDocument>> reader)

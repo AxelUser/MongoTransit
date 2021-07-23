@@ -66,13 +66,13 @@ namespace MongoTransit.Storage.Destination
 
         }
 
-        public async Task ReplaceDocumentAsync(FilterDefinition<BsonDocument> filter, BsonDocument replacement, CancellationToken token)
+        public async Task ReplaceDocumentAsync(ReplaceOneModel<BsonDocument> model, CancellationToken token)
         {
             var sw = new Stopwatch();
             sw.Start();
             try
             {
-                var result = await _collection.ReplaceOneAsync(filter, replacement, new ReplaceOptions
+                var result = await _collection.ReplaceOneAsync(model.Filter, model.Replacement, new ReplaceOptions
                 {
                     BypassDocumentValidation = true
                 }, token);
@@ -82,7 +82,7 @@ namespace MongoTransit.Storage.Destination
                     result.ModifiedCount == 1
                         ? "Successfully retried replacement of document (ID: {Id}) in {Elapsed:N1} ms"
                         : "Failed replacement of document (ID: {Id}) in {Elapsed:N1} ms. Document is missing",
-                    replacement["_id"], sw.ElapsedMilliseconds);
+                    model.Replacement["_id"], sw.ElapsedMilliseconds);
             }
             catch (OperationCanceledException)
             {

@@ -246,7 +246,8 @@ namespace MongoTransit.UnitTests.Repositories
                 ["_id"] = inserted["_id"],
                 ["Value"] = "replaced"
             };
-            await _sut.ReplaceDocumentAsync(inserted.GetFilterBy("_id"), replacement, CancellationToken.None);
+            await _sut.ReplaceDocumentAsync(new ReplaceOneModel<BsonDocument>(replacement.GetFilterBy("_id"), replacement),
+                CancellationToken.None);
             
             // Assert
             var afterReplace = _destCollection.FindSync(FilterDefinition<BsonDocument>.Empty).ToList();
@@ -266,11 +267,13 @@ namespace MongoTransit.UnitTests.Repositories
             await _destCollection.InsertOneAsync(inserted);
 
             // Act
-            await _sut.ReplaceDocumentAsync(new BsonDocument("_id", "not_exist"), new BsonDocument
+            var replacement = new BsonDocument
             {
                 ["_id"] = "not_exist",
                 ["Value"] = Fixture.Create<string>()
-            }, CancellationToken.None);
+            };
+            await _sut.ReplaceDocumentAsync(new ReplaceOneModel<BsonDocument>(replacement.GetFilterBy("_id"), replacement),
+                CancellationToken.None);
             
             // Assert
             var afterReplace = _destCollection.FindSync(FilterDefinition<BsonDocument>.Empty).ToList();
