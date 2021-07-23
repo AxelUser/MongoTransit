@@ -20,7 +20,8 @@ namespace MongoTransit.Transit
             var handlers = new ICollectionTransitHandler?[options.Length];
             var operations = new Task[options.Length];
 
-            var progressNotification = StartNotifier(logger, notificationInterval);
+            var progressManager = new ProgressManager();
+            var progressNotification = StartNotificationLoop(progressManager, logger, notificationInterval);
             try
             {
                 foreach (var cycle in cyclesIterator)
@@ -33,7 +34,7 @@ namespace MongoTransit.Transit
                     {
                         var currentOptions = options[idx];
                         
-                        handlers[idx] = handlers[idx] == null ? CreateCollectionHandler(currentOptions, progressNotification, logger) : handlers[idx];
+                        handlers[idx] = handlers[idx] == null ? CreateCollectionHandler(currentOptions, progressManager, logger) : handlers[idx];
                         var handler = handlers[idx];
                         
                         operations[idx] = Task.Run(async () =>
@@ -61,7 +62,7 @@ namespace MongoTransit.Transit
         }
 
         private static ICollectionTransitHandler CreateCollectionHandler(CollectionTransitOptions currentOptions,
-            NotificationLoop progressNotification, ILogger logger)
+            IProgressManager progressManager, ILogger logger)
         {
             var collectionLogger = logger.ForContext("Scope", currentOptions.Collection);
 
@@ -78,16 +79,15 @@ namespace MongoTransit.Transit
             
             // ReSharper disable once ConstantNullCoalescingCondition
             var handler = new CollectionTransitHandler(sourceFactory, destFactory, preparationHandler,
-                workerPoolFactory, progressNotification.Manager,
+                workerPoolFactory, progressManager,
                 collectionLogger, currentOptions);
             return handler;
         }
 
-        private record NotificationLoop(Task Loop, ProgressManager Manager, CancellationTokenSource Cancellation);
+        private record NotificationLoop(Task Loop, IProgressManager Manager, CancellationTokenSource Cancellation);
 
-        private static NotificationLoop StartNotifier(ILogger logger, TimeSpan delay)
+        private static NotificationLoop StartNotificationLoop(IProgressManager manager, ILogger logger, TimeSpan delay)
         {
-            var manager = new ProgressManager();
             var cts = new CancellationTokenSource();
             var loop = Task.Run(async () =>
             {
