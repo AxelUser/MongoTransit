@@ -4,7 +4,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoTransit.Progress;
 
-namespace MongoTransit.Workers
+namespace MongoTransit.Processing
 {
     public interface IDocumentsWriterFactory
     {

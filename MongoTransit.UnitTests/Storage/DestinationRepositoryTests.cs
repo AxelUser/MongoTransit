@@ -14,7 +14,7 @@ using Moq;
 using Serilog;
 using Xunit;
 
-namespace MongoTransit.UnitTests.Repositories
+namespace MongoTransit.UnitTests.Storage
 {
     public class DestinationRepositoryTests: RepositoriesTestBase
     {

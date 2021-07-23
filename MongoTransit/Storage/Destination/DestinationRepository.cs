@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoTransit.Extensions;
+using MongoTransit.Storage.Destination.Exceptions;
 using Serilog;
 
 namespace MongoTransit.Storage.Destination

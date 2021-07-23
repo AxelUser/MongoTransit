@@ -4,10 +4,11 @@ using MongoTransit.Options;
 using MongoTransit.Progress;
 using MongoTransit.Storage.Destination;
 using MongoTransit.Storage.Source;
+using MongoTransit.Storage.Source.Models;
 using Serilog;
 using Stopwatch = System.Diagnostics.Stopwatch;
 
-namespace MongoTransit.Transit
+namespace MongoTransit.Preparation
 {
     public class CollectionPreparationHandler : ICollectionPreparationHandler
     {

@@ -5,12 +5,13 @@ using AutoFixture;
 using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Driver;
-using MongoTransit.Workers;
+using MongoTransit.Processing;
+using MongoTransit.Processing.Workers;
 using Moq;
 using Serilog;
 using Xunit;
 
-namespace MongoTransit.UnitTests
+namespace MongoTransit.UnitTests.Processing
 {
     public class DocumentsWriterTests
     {

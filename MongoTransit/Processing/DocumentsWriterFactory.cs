@@ -2,11 +2,12 @@
 using System.Threading.Channels;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using MongoTransit.Processing.Workers;
 using MongoTransit.Progress;
 using MongoTransit.Storage.Destination;
 using Serilog;
 
-namespace MongoTransit.Workers
+namespace MongoTransit.Processing
 {
     public class DocumentsWriterFactory : IDocumentsWriterFactory
     {

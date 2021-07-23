@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using MongoTransit.Options;
 using MongoTransit.Progress;
 
-namespace MongoTransit.Transit
+namespace MongoTransit.Preparation
 {
     public interface ICollectionPreparationHandler
     {

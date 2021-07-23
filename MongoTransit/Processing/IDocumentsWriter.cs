@@ -1,7 +1,7 @@
 ﻿using System.Threading;
 using System.Threading.Tasks;
 
-namespace MongoTransit.Workers
+namespace MongoTransit.Processing
 {
     public interface IDocumentsWriter
     {

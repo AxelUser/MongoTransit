@@ -1,7 +1,7 @@
 using System;
 using MongoDB.Bson;
 
-namespace MongoTransit.Storage.Source
+namespace MongoTransit.Storage.Source.Models
 {
     public record SourceFilter(string? Field, DateTime? Checkpoint)
     {

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace MongoTransit.Storage.Destination
+namespace MongoTransit.Storage.Destination.Exceptions
 {
     public class ReplaceManyException: Exception
     {

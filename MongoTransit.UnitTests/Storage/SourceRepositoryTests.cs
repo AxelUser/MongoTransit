@@ -11,11 +11,12 @@ using MongoDB.Driver;
 using MongoTransit.Storage;
 using MongoTransit.Storage.Destination;
 using MongoTransit.Storage.Source;
+using MongoTransit.Storage.Source.Models;
 using Moq;
 using Serilog;
 using Xunit;
 
-namespace MongoTransit.UnitTests.Repositories
+namespace MongoTransit.UnitTests.Storage
 {
     
     public class SourceRepositoryTests: RepositoriesTestBase

@@ -5,15 +5,16 @@ using AutoFixture;
 using AutoFixture.Xunit2;
 using FluentAssertions;
 using MongoTransit.Options;
+using MongoTransit.Preparation;
 using MongoTransit.Progress;
 using MongoTransit.Storage.Destination;
 using MongoTransit.Storage.Source;
-using MongoTransit.Transit;
+using MongoTransit.Storage.Source.Models;
 using Moq;
 using Serilog;
 using Xunit;
 
-namespace MongoTransit.UnitTests
+namespace MongoTransit.UnitTests.Preparation
 {
     public class CollectionPreparationHandlerTests
     {

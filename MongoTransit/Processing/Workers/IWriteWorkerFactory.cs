@@ -5,7 +5,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using Serilog;
 
-namespace MongoTransit.Workers
+namespace MongoTransit.Processing.Workers
 {
     public interface IWriteWorkerFactory
     {

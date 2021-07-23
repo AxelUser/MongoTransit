@@ -1,6 +1,6 @@
 using System;
 
-namespace MongoTransit.Storage.Destination
+namespace MongoTransit.Storage.Destination.Exceptions
 {
     public class ReplaceOneException: Exception
     {

@@ -5,6 +5,7 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using MongoTransit.Storage.Source.Models;
 using Serilog;
 
 namespace MongoTransit.Storage.Source

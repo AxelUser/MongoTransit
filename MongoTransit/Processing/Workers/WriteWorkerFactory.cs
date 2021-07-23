@@ -9,9 +9,10 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoTransit.Progress;
 using MongoTransit.Storage.Destination;
+using MongoTransit.Storage.Destination.Exceptions;
 using Serilog;
 
-namespace MongoTransit.Workers
+namespace MongoTransit.Processing.Workers
 {
     public class WriteWorkerFactory : IWriteWorkerFactory
     {

@@ -7,17 +7,19 @@ using AutoFixture.Xunit2;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoTransit.Options;
+using MongoTransit.Preparation;
+using MongoTransit.Processing;
 using MongoTransit.Progress;
 using MongoTransit.Storage;
 using MongoTransit.Storage.Destination;
 using MongoTransit.Storage.Source;
+using MongoTransit.Storage.Source.Models;
 using MongoTransit.Transit;
-using MongoTransit.Workers;
-using Xunit;
 using Moq;
 using Serilog;
+using Xunit;
 
-namespace MongoTransit.UnitTests
+namespace MongoTransit.UnitTests.Transit
 {
     public class CollectionTransitHandlerTests
     {

@@ -9,14 +9,15 @@ using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoTransit.Extensions;
+using MongoTransit.Processing.Workers;
 using MongoTransit.Progress;
 using MongoTransit.Storage.Destination;
-using MongoTransit.Workers;
+using MongoTransit.Storage.Destination.Exceptions;
 using Moq;
 using Serilog;
 using Xunit;
 
-namespace MongoTransit.UnitTests
+namespace MongoTransit.UnitTests.Processing
 {
     public class WriteWorkerFactoryTests
     {
