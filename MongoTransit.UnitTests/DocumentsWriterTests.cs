@@ -37,10 +37,10 @@ namespace MongoTransit.UnitTests
             // Arrange
             _workerFactoryMock.Setup(f => f.RunWorker(It.IsAny<ChannelWriter<ReplaceOneModel<BsonDocument>>>(),
                     It.IsAny<ILogger>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync((100, 0, 0));
+                .ReturnsAsync(new WorkerResult(100, 0, 0));
             _workerFactoryMock.Setup(f => f.RunRetryWorker(It.IsAny<ChannelReader<ReplaceOneModel<BsonDocument>>>(),
                     It.IsAny<ILogger>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync((100, 0, 0));
+                .ReturnsAsync(new WorkerResult(100, 0, 0));
             _writer = new DocumentsWriter(numberOfWorkers, 0, _fixture.Create<string>(),
                 _workerFactoryMock.Object, _loggerMock.Object);
             
@@ -60,10 +60,10 @@ namespace MongoTransit.UnitTests
             // Arrange
             _workerFactoryMock.Setup(f => f.RunWorker(It.IsAny<ChannelWriter<ReplaceOneModel<BsonDocument>>>(),
                     It.IsAny<ILogger>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync((100L, 0L, 0L));
+                .ReturnsAsync(new WorkerResult(100L, 0L, 0L));
             _workerFactoryMock.Setup(f => f.RunRetryWorker(It.IsAny<ChannelReader<ReplaceOneModel<BsonDocument>>>(),
                     It.IsAny<ILogger>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync((100L, 0L, 0L));
+                .ReturnsAsync(new WorkerResult(100L, 0L, 0L));
             _writer = new DocumentsWriter(numberOfWorkers, numberOfWorkers, _fixture.Create<string>(),
                 _workerFactoryMock.Object, _loggerMock.Object);
             
@@ -81,7 +81,7 @@ namespace MongoTransit.UnitTests
         public async Task WriteAsync_ShouldReturnSumOfWorkersResults_InsertionAndRetryWorkersAreStarted(int insertionWorkers)
         {
             // Arrange
-            var result = (3L, 2L, 1L);
+            var result = new WorkerResult(3L, 2L, 1L);
             _workerFactoryMock.Setup(f => f.RunWorker(It.IsAny<ChannelWriter<ReplaceOneModel<BsonDocument>>>(),
                     It.IsAny<ILogger>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(result);
@@ -96,8 +96,8 @@ namespace MongoTransit.UnitTests
             var actual = await _writer.WriteAsync(CancellationToken.None);
             
             // Assert
-            var expected = new TransferResults(result.Item1 * insertionWorkers * 2, result.Item2 * insertionWorkers * 2,
-                result.Item3 * insertionWorkers * 2);
+            var expected = new TransferResults(result.Successful * insertionWorkers * 2, result.Retryable * insertionWorkers * 2,
+                result.Failed * insertionWorkers * 2);
             actual.Should().Be(expected);
         }
     }

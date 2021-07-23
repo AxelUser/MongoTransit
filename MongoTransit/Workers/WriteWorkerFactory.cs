@@ -37,8 +37,8 @@ namespace MongoTransit.Workers
             _collectionName = collectionName;
         }
         
-        public async Task<(long successful, long retryable, long failed)> RunWorker(
-            ChannelWriter<ReplaceOneModel<BsonDocument>> failedWrites, ILogger workerLogger,
+        public async Task<WorkerResult> RunWorker(ChannelWriter<ReplaceOneModel<BsonDocument>> failedWrites,
+            ILogger workerLogger,
             CancellationToken token)
         {
             var repository = _repositoryFactory.Create(workerLogger);
@@ -103,12 +103,12 @@ namespace MongoTransit.Workers
                 }
             } 
             
-            return (totalSuccessful, totalRetryable, totalFailed);
+            return new WorkerResult(totalSuccessful, totalRetryable, totalFailed);
 
         }
 
-        public async Task<(long processed, long totalRetried, long failed)> RunRetryWorker(
-            ChannelReader<ReplaceOneModel<BsonDocument>> failedWrites, ILogger workerLogger,
+        public async Task<WorkerResult> RunRetryWorker(ChannelReader<ReplaceOneModel<BsonDocument>> failedWrites,
+            ILogger workerLogger,
             CancellationToken token)
         {
             var repository = _repositoryFactory.Create(workerLogger);
@@ -132,20 +132,16 @@ namespace MongoTransit.Workers
                 {
                     throw;
                 }
-                catch (MongoWriteException we)
-                {
-                    workerLogger.Error("Failed to retry replacement (ID: {Id}): {Msg}", documentId, we.Message);
-                    workerLogger.Debug(we, "Retry exception details:");
-                    totalFailed++;
-                }
                 catch (Exception e)
                 {
-                    workerLogger.Error(e, "Error occurred while transferring documents to {Collection}", _collectionName);
+                    workerLogger.Error("Failed to retry replacement (ID: {Id}) in collection {Collection}: {Msg}",
+                        documentId, _collectionName, e.Message);
+                    workerLogger.Debug(e, "Retry exception details:");
                     totalFailed++;
                 }
             }
             
-            return (totalProcessed, 0, totalFailed);
+            return new WorkerResult(totalProcessed, 0, totalFailed);
 
         }
     }

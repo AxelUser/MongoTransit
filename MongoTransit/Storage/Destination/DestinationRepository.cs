@@ -46,6 +46,7 @@ namespace MongoTransit.Storage.Destination
             }
             catch (MongoBulkWriteException<BsonDocument> bwe)
             {
+                sw.Stop();
                 var errors = bwe.WriteErrors.Select(error => new ReplaceErrorInfo(error.Index, error.Message)).ToList();
                 _logger.Debug("Processed bulk of {Count:N0} documents with {Errors} errors in {Elapsed:N1} ms",
                     replacements.Count, errors.Count, sw.ElapsedMilliseconds);
@@ -57,6 +58,7 @@ namespace MongoTransit.Storage.Destination
             }
             catch (Exception e)
             {
+                sw.Stop();
                 _logger.Debug("Failed to process bulk of {Count:N0} documents errors in {Elapsed:N1} ms",
                     replacements.Count, sw.ElapsedMilliseconds);
                 throw new ReplaceManyException(e);
@@ -68,17 +70,29 @@ namespace MongoTransit.Storage.Destination
         {
             var sw = new Stopwatch();
             sw.Start();
-            var result = await _collection.ReplaceOneAsync(filter, replacement, new ReplaceOptions
+            try
             {
-                BypassDocumentValidation = true
-            }, token);
-            sw.Stop();
+                var result = await _collection.ReplaceOneAsync(filter, replacement, new ReplaceOptions
+                {
+                    BypassDocumentValidation = true
+                }, token);
+                sw.Stop();
 
-            _logger.Debug(
-                result.ModifiedCount == 1
-                    ? "Successfully retried replacement of document (ID: {Id}) in {Elapsed:N1} ms"
-                    : "Failed replacement of document (ID: {Id}) in {Elapsed:N1} ms. Document is missing",
-                replacement["_id"], sw.ElapsedMilliseconds);
+                _logger.Debug(
+                    result.ModifiedCount == 1
+                        ? "Successfully retried replacement of document (ID: {Id}) in {Elapsed:N1} ms"
+                        : "Failed replacement of document (ID: {Id}) in {Elapsed:N1} ms. Document is missing",
+                    replacement["_id"], sw.ElapsedMilliseconds);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception e)
+            {
+                throw new ReplaceOneException($"Failed to replace document: {e.Message}", e);
+            }
+
         }
 
         public async Task DeleteAllDocumentsAsync(CancellationToken token)

@@ -13,8 +13,8 @@ namespace MongoTransit.Workers
     {
         private readonly ILogger _logger;
         private readonly Channel<ReplaceOneModel<BsonDocument>> _retriesChannel;
-        private readonly Task<(long processed, long retried, long failed)>[] _insertionWorkers;
-        private readonly Task<(long processed, long retried, long failed)>[] _retryWorkers;
+        private readonly Task<WorkerResult>[] _insertionWorkers;
+        private readonly Task<WorkerResult>[] _retryWorkers;
         private readonly string _collectionName;
         private readonly IWriteWorkerFactory _writeWorkerFactory;
 
@@ -28,10 +28,10 @@ namespace MongoTransit.Workers
             _writeWorkerFactory = writeWorkerFactory;
             _logger = logger;
             _insertionWorkers = insertionWorkersCount > 0
-                ? new Task<(long processed, long retried, long failed)>[insertionWorkersCount]
+                ? new Task<WorkerResult>[insertionWorkersCount]
                 : throw new ArgumentOutOfRangeException(nameof(insertionWorkersCount), insertionWorkersCount, "Should be greater than zero");
             _retryWorkers = retryWorkersCount >= 0
-                ? new Task<(long processed, long retried, long failed)>[retryWorkersCount]
+                ? new Task<WorkerResult>[retryWorkersCount]
                 : throw new ArgumentOutOfRangeException(nameof(insertionWorkersCount), insertionWorkersCount, "Should be positive");
             
             _retriesChannel = Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>();

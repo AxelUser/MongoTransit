@@ -104,7 +104,7 @@ namespace MongoTransit.UnitTests
                 CancellationToken.None);
 
             // Assert
-            actual.successful.Should().Be(batchSize);
+            actual.Successful.Should().Be(batchSize);
         }
         
         [Theory]
