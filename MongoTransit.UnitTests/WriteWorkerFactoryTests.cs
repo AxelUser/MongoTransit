@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -219,6 +220,29 @@ namespace MongoTransit.UnitTests
 
             // Assert
             _notifierMock.Verify(notifier => notifier.Notify(batchSize), Times.Once);
+        }
+        
+        [Fact]
+        public async Task RunWorker_ShouldThrowCancellationException_ChannelIsOpenAndOperationIsCancelled()
+        {
+            // Arrange
+            var replacements = Enumerable.Range(0, 10).Select(_ => new BsonDocument
+            {
+                ["_id"] = _fixture.Create<string>(),
+                ["Value"] = _fixture.Create<string>()
+            });
+            var batch = replacements.Select(d => new ReplaceOneModel<BsonDocument>(d.GetFilterBy("_id"), d)).ToList();
+            var cts = new CancellationTokenSource();
+            await _channel.Writer.WriteAsync(batch, CancellationToken.None);
+            var worker = _sut.RunWorker(Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>(), new Mock<ILogger>().Object,
+                cts.Token);
+
+            // Act
+            cts.Cancel();
+            
+            // Assert
+            Func<Task> act = async () => await worker;
+            await act.Should().ThrowAsync<OperationCanceledException>();
         }
 
         #endregion
