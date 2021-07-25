@@ -15,7 +15,7 @@ namespace MongoTransit.UnitTests.Storage
         
         protected (MongoDbRunner runner, IMongoCollection<BsonDocument> collection) CreateConnection([CallerMemberName] string testName = "TestCollection")
         {
-            var runner = MongoDbRunner.Start();
+            var runner = MongoDbRunner.Start(additionalMongodArguments: "--quiet");
             var client = new MongoClient(runner.ConnectionString);
             var database = client.GetDatabase("TestDatabase");
             var collection = database.GetCollection<BsonDocument>(testName);
