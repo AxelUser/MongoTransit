@@ -18,4 +18,6 @@ jobs:
     - name: Build
       run: dotnet build --configuration Release --no-restore
     - name: Unit tests
-      run: dotnet test --no-restore --verbosity normal
+      run: dotnet test --no-restore --verbosity normal --filter !~IntegrationTests
+    - name: Start integration MongoDB
+      run: sh mongo-transit-sharded-cluster/init.sh
