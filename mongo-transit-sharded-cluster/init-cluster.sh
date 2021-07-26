@@ -3,6 +3,9 @@
 echo "Init cluster step 1: Start all of the containers"
 docker-compose up -d
 
+echo "Waiting 20 seconds for all containers to start"
+sleep 20s
+
 echo "Init cluster step 2.1: Initialize config servers rs"
 docker-compose exec -T configsvr01 sh -c "mongo < /scripts/init-configserver.js"
 
