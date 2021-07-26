@@ -20,4 +20,6 @@ jobs:
     - name: Unit tests
       run: dotnet test --no-restore MongoTransit.UnitTests
     - name: Start integration MongoDB
-      run: (cd mongo-transit-sharded-cluster && sh init.sh)
+      run: (cd mongo-transit-sharded-cluster && sh init-cluster.sh)
+      env:
+        COMPOSE_INTERACTIVE_NO_CLI: 1
