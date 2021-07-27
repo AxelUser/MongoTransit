@@ -19,5 +19,7 @@ jobs:
       run: dotnet build --configuration Release --no-restore
     - name: Unit tests
       run: dotnet test --no-restore MongoTransit.UnitTests
-    - name: Start integration MongoDB
+    - name: Create MongoDB Sharded Cluster
       run: (cd mongo-transit-sharded-cluster && sh init-cluster.sh)
+    - name: Integration tests
+      run: dotnet test --no-restore MongoTransit.IntegrationTests

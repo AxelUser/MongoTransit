@@ -23,6 +23,3 @@ sleep 50s
 
 echo "Init cluster step 3: Initializing the router"
 docker-compose exec -T router01 sh -c "mongo < /scripts/init-router.js"
-
-echo "Init cluster step 4: creating test database and collections"
-docker-compose exec -T router01 sh -c "mongo < /scripts/init-sharded-collections.js"
