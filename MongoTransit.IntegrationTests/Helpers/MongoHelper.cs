@@ -16,7 +16,7 @@ namespace MongoTransit.IntegrationTests.Helpers
             _adminDb = _client.GetDatabase("admin");
         }
 
-        public async Task<IMongoCollection<T>> CreateShardedCollectionAsync<T>(string databaseName, string collectionName, string key)
+        public async Task CreateShardedCollectionAsync(string databaseName, string collectionName, string key)
         {
             await _client.GetDatabase(databaseName).CreateCollectionAsync(collectionName);
             VerifyOk(await _adminDb.RunCommandAsync<BsonDocument>(new BsonDocument
@@ -29,8 +29,6 @@ namespace MongoTransit.IntegrationTests.Helpers
                 ["shardCollection"] = $"{databaseName}.{collectionName}",
                 ["key"] = new BsonDocument(key, 1)
             }), "Sharding Collection");
-
-            return _client.GetDatabase(databaseName).GetCollection<T>(collectionName);
         }
 
         private void VerifyOk(BsonDocument operationResult, string operationName)

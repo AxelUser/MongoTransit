@@ -11,13 +11,13 @@ namespace MongoTransit.IntegrationTests
 
         public MongoHelperTest()
         {
-            _helper = new MongoHelper(new MongoClient("mongodb://localhost:27117"));
+            _helper = new MongoHelper(IntegrationHelper.CreateClient());
         }
         
         [Fact]
         public async Task CreateShardedCollection_ShouldCompleteWithoutErrors_PassedValidParameters()
         {
-            await _helper.CreateShardedCollectionAsync<Entity>("TestDb", "TestCollection", nameof(Entity.ShardedKey));
+            await _helper.CreateShardedCollectionAsync("TestDb", "TestCollection", nameof(Entity.ShardedKey));
         }
     }
 }
