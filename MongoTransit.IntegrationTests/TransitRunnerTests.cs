@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AutoFixture;
@@ -15,31 +16,59 @@ namespace MongoTransit.IntegrationTests
 {
     public class TransitRunnerTests: IntegrationTestBase
     {
+        public record TestTransitOptions(string Database,
+            string Collection,
+            bool FetchKey,
+            IterativeTransitOptions IterativeOptions);
+
+        public static IEnumerable<object[]> GetTestTransitOptions =>
+            new List<object[]>
+            {
+                new object[]
+                {
+                    new TestTransitOptions[]
+                    {
+                        new("Test", "Test", true, null)
+                    }
+                }
+            };
+        
+        
         // TODO: clean-up collections
         private readonly HashSet<(string Database, string Collection)> _createdCollections = new();
 
         [Theory]
-        [InlineData(1_000)]
-        public async Task RunAsync_ShouldTransferAllData_DestinationCollectionIsSharded(int documentsCount)
+        [MemberData(nameof(GetTestTransitOptions))]
+        public async Task RunAsync_ShouldTransferAllData_DestinationCollectionIsSharded(TestTransitOptions[] options)
         {
             // Arrange
-            var database = Fixture.Create<string>();
-            var collection = Fixture.Create<string>();
-            await CreateCollectionAsync(database, collection);
+            const int documentsCount = 1_000;
 
-            var entities = Fixture.CreateMany<Entity>(documentsCount);
-            await SourceClient.GetDatabase(database).GetCollection<Entity>(collection).InsertManyAsync(entities);
-            var transitOptions = new CollectionTransitOptions(SourceConnectionString, DestinationConnectionString,
-                database, collection, new[] { nameof(Entity.ShardedKey) }, true, 4, 100, true, null);
+            foreach (var option in options)
+            {
+                await CreateCollectionAsync(option.Database, option.Collection);
+                var entities = Fixture.CreateMany<Entity>(documentsCount);
+                await SourceClient.GetDatabase(option.Database).GetCollection<Entity>(option.Collection)
+                    .InsertManyAsync(entities);
+            }
+
+            var transitOptions = options.Select(o => new CollectionTransitOptions(SourceConnectionString,
+                DestinationConnectionString,
+                o.Database, o.Collection, new[] { nameof(Entity.ShardedKey) }, o.FetchKey, 4, 100, true,
+                o.IterativeOptions)).ToArray(); 
             
             // Act
-            await TransitRunner.RunAsync(CreateLogger(), new[] { transitOptions }, SingeCycle(), false,
+            await TransitRunner.RunAsync(CreateLogger(), transitOptions, SingeCycle(), false,
                 TimeSpan.FromSeconds(3), CancellationToken.None);
             
             // Assert
-            var count = await DestinationClient.GetDatabase(database).GetCollection<Entity>(collection)
-                .CountDocumentsAsync(FilterDefinition<Entity>.Empty);
-            count.Should().Be(documentsCount);
+            foreach (var option in options)
+            {
+                var count = await DestinationClient.GetDatabase(option.Database).GetCollection<Entity>(option.Collection)
+                    .CountDocumentsAsync(FilterDefinition<Entity>.Empty);
+                count.Should().Be(documentsCount,
+                    $"Collection {option.Database}.{option.Collection} should have all documents");
+            }
         }
 
         #region additional methods
