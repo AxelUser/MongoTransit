@@ -28,7 +28,7 @@ namespace MongoTransit.IntegrationTests
             Helper = new MongoHelper(DestinationClient);
         }
 
-        public void Dispose()
+        public virtual void Dispose()
         {
             foreach (var runner in _runners)
             {

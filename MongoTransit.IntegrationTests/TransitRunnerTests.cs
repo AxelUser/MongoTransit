@@ -16,7 +16,8 @@ namespace MongoTransit.IntegrationTests
     public class TransitRunnerTests: IntegrationTestBase
     {
         // TODO: clean-up collections
-        
+        private readonly HashSet<(string Database, string Collection)> _createdCollections = new();
+
         [Theory]
         [InlineData(1_000)]
         public async Task RunAsync_ShouldTransferAllData_DestinationCollectionIsSharded(int documentsCount)
@@ -47,6 +48,7 @@ namespace MongoTransit.IntegrationTests
         {
             await SourceClient.GetDatabase(database).CreateCollectionAsync(collection);
             await Helper.CreateShardedCollectionAsync(database, collection, nameof(Entity.ShardedKey));
+            _createdCollections.Add((database, collection));
         }
 
         private ILogger CreateLogger()
@@ -62,6 +64,18 @@ namespace MongoTransit.IntegrationTests
         private IEnumerable<int> SingeCycle()
         {
             yield return 0;
+        }
+
+        public override void Dispose()
+        {
+            foreach (var (database, collection) in _createdCollections)
+            {
+                DestinationClient.GetDatabase(database).DropCollection(collection);
+                if (!DestinationClient.GetDatabase(database).ListCollections().Any())
+                    DestinationClient.DropDatabase(database);
+            }
+            
+            base.Dispose();
         }
 
         #endregion
