@@ -10,14 +10,15 @@ namespace MongoTransit.IntegrationTests
     public abstract class IntegrationTestBase: IDisposable
     {
         private readonly List<MongoDbRunner> _runners = new();
-        protected readonly Fixture Fixture = new Fixture();
+
+        protected readonly Fixture Fixture = new();
         protected readonly string SourceConnectionString;
         protected readonly string DestinationConnectionString;
         protected readonly IMongoClient SourceClient;
         protected readonly IMongoClient DestinationClient;
         protected readonly MongoHelper Helper;
 
-        public IntegrationTestBase()
+        protected IntegrationTestBase()
         {
             var runner = MongoDbRunner.Start(additionalMongodArguments: "--quiet");
             _runners.Add(runner);

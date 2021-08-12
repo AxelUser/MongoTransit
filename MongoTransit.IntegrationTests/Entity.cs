@@ -1,3 +1,4 @@
+using System;
 using MongoDB.Bson;
 
 namespace MongoTransit.IntegrationTests
@@ -7,5 +8,7 @@ namespace MongoTransit.IntegrationTests
         public string ShardedKey { get; set; }
 
         public string Value { get; set; }
+
+        public DateTime Modified { get; set; }
     }
 }
