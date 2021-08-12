@@ -97,8 +97,7 @@ namespace MongoTransit.IntegrationTests
         #endregion
         
         #endregion
-        
-        
+
         private readonly HashSet<(string Database, string Collection)> _createdCollections = new();
 
         public TransitRunnerTests(ITestOutputHelper testOutputHelper)
@@ -118,7 +117,7 @@ namespace MongoTransit.IntegrationTests
             foreach (var option in options)
             {
                 await CreateCollectionAsync(option.Database, option.Collection);
-                var entities = Fixture.CreateMany<Entity>(documentsCount);
+                var entities = Fixture.CreateMany<Entity>(documentsCount).ToArray();
                 await SourceClient.GetDatabase(option.Database).GetCollection<Entity>(option.Collection)
                     .InsertManyAsync(entities);
             }
@@ -135,10 +134,12 @@ namespace MongoTransit.IntegrationTests
             // Assert
             foreach (var option in options)
             {
-                var count = await DestinationClient.GetDatabase(option.Database).GetCollection<Entity>(option.Collection)
-                    .CountDocumentsAsync(FilterDefinition<Entity>.Empty);
-                count.Should().Be(documentsCount,
-                    $"Collection {option.Database}.{option.Collection} should have all documents");
+                var sourceEntities = await SourceClient.GetDatabase(option.Database).GetCollection<Entity>(option.Collection)
+                    .Find(FilterDefinition<Entity>.Empty).ToListAsync();
+                var destinationEntities = await DestinationClient.GetDatabase(option.Database).GetCollection<Entity>(option.Collection)
+                    .Find(FilterDefinition<Entity>.Empty).ToListAsync();
+                destinationEntities.Should().BeEquivalentTo(sourceEntities,
+                    $"Destination collection {option.Database}.{option.Collection} should have all documents from source");
             }
         }
         
@@ -168,7 +169,7 @@ namespace MongoTransit.IntegrationTests
             var transitOptions = options.Select(o => new CollectionTransitOptions(SourceConnectionString,
                 DestinationConnectionString,
                 o.Database, o.Collection, new[] { nameof(Entity.ShardedKey) }, o.FetchKey, 4, 100, true,
-                null)).ToArray(); 
+                o.IterativeOptions)).ToArray(); 
             
             // Act
             await TransitRunner.RunAsync(CreateLogger(), transitOptions, SingeCycle(), false,
@@ -194,10 +195,12 @@ namespace MongoTransit.IntegrationTests
             // Assert
             foreach (var option in options)
             {
-                var count = await DestinationClient.GetDatabase(option.Database).GetCollection<Entity>(option.Collection)
-                    .CountDocumentsAsync(FilterDefinition<Entity>.Empty);
-                count.Should().Be(1000,
-                    $"Collection {option.Database}.{option.Collection} should have all documents");
+                var sourceEntities = await SourceClient.GetDatabase(option.Database).GetCollection<Entity>(option.Collection)
+                    .Find(FilterDefinition<Entity>.Empty).ToListAsync();
+                var destinationEntities = await DestinationClient.GetDatabase(option.Database).GetCollection<Entity>(option.Collection)
+                    .Find(FilterDefinition<Entity>.Empty).ToListAsync();
+                destinationEntities.Should().BeEquivalentTo(sourceEntities,
+                    $"Destination collection {option.Database}.{option.Collection} should have all documents from source");
             }
         }
 
