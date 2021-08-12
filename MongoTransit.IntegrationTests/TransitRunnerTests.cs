@@ -33,7 +33,7 @@ namespace MongoTransit.IntegrationTests
             {
                 new object[]
                 {
-                    "Single database with multiple collections (Full restore)",
+                    "Full restore - Single database with multiple collections",
                     new TestTransitOptions[]
                     {
                         new("TestDb", "Test1", true, null),
@@ -43,7 +43,7 @@ namespace MongoTransit.IntegrationTests
                 },
                 new object[]
                 {
-                    "Multiple databases with multiple collections (Full restore)",
+                    "Full restore - Multiple databases with multiple collections",
                     new TestTransitOptions[]
                     {
                         new("TestDb1", "Test1", true, null),
@@ -63,7 +63,7 @@ namespace MongoTransit.IntegrationTests
             {
                 new object[]
                 {
-                    "Single database with multiple collections (Iterative restore)",
+                    "Iterative restore - Single database with multiple collections",
                     new TestTransitOptions[]
                     {
                         new("TestDb", "Test1", true, new IterativeTransitOptions(nameof(Entity.Modified), TimeSpan.Zero, null)),
@@ -73,7 +73,7 @@ namespace MongoTransit.IntegrationTests
                 },
                 new object[]
                 {
-                    "Multiple databases with multiple collections (Iterative restore)",
+                    "Iterative restore - Multiple databases with multiple collections",
                     new TestTransitOptions[]
                     {
                         new("TestDb1", "Test1", true, new IterativeTransitOptions(nameof(Entity.Modified), TimeSpan.Zero, null)),
@@ -81,7 +81,17 @@ namespace MongoTransit.IntegrationTests
                         new("TestDb2", "Test1", true, new IterativeTransitOptions(nameof(Entity.Modified), TimeSpan.Zero, null)),
                         new("TestDb2", "Test2", true, new IterativeTransitOptions(nameof(Entity.Modified), TimeSpan.Zero, null)),
                     }
-                }
+                },
+                new object[]
+                {
+                    "Iterative restore - Single database with multiple collections and specified offset",
+                    new TestTransitOptions[]
+                    {
+                        new("TestDb", "Test1", true, new IterativeTransitOptions(nameof(Entity.Modified), TimeSpan.FromSeconds(1),  null)),
+                        new("TestDb", "Test2", true, new IterativeTransitOptions(nameof(Entity.Modified), TimeSpan.FromSeconds(10), null)),
+                        new("TestDb", "Test3", true, new IterativeTransitOptions(nameof(Entity.Modified), TimeSpan.FromMinutes(5), null))
+                    }
+                },
             };
 
         #endregion
@@ -171,7 +181,7 @@ namespace MongoTransit.IntegrationTests
                 var entities = Enumerable
                     .Range(0, secondLoadCount)
                     .Select(i => Fixture.Build<Entity>()
-                        .With(e => e.Modified, startDateForSecondLoad.AddSeconds(i))
+                        .With(e => e.Modified, startDateForSecondLoad.AddSeconds(i) - option.IterativeOptions.Offset)
                         .Create())
                     .ToArray(); 
                 await SourceClient.GetDatabase(option.Database).GetCollection<Entity>(option.Collection)
