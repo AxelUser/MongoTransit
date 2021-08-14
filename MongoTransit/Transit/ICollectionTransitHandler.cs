@@ -1,10 +1,11 @@
 using System.Threading;
 using System.Threading.Tasks;
+using MongoTransit.Processing;
 
 namespace MongoTransit.Transit
 {
     public interface ICollectionTransitHandler
     {
-        Task TransitAsync(bool dryRun, CancellationToken token);
+        Task<TransferResults> TransitAsync(bool dryRun, CancellationToken token);
     }
 }

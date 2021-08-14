@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MongoTransit.Notifications;
@@ -14,11 +15,12 @@ namespace MongoTransit.Transit
 {
     public static class TransitRunner
     {
-        public static async Task RunAsync(ILogger logger, CollectionTransitOptions[] options,
+        public static async Task<TransferResults> RunAsync(ILogger logger, CollectionTransitOptions[] options,
             IEnumerable<int> cyclesIterator, bool dryRun, TimeSpan notificationInterval, CancellationToken token)
         {
+            var totalResults = TransferResults.Empty;
             var handlers = new ICollectionTransitHandler?[options.Length];
-            var operations = new Task[options.Length];
+            var operations = new Task<TransferResults>[options.Length];
 
             var progressManager = new ProgressManager();
             await using var notification = new NotificationLoop(progressManager, logger, notificationInterval);
@@ -35,24 +37,16 @@ namespace MongoTransit.Transit
                         
                     handlers[idx] = handlers[idx] == null ? CreateCollectionHandler(currentOptions, progressManager, logger) : handlers[idx];
                     var handler = handlers[idx];
-                        
-                    operations[idx] = Task.Run(async () =>
-                    {
-                        try
-                        {
-                            await handler!.TransitAsync(dryRun, token);
-                        }
-                        catch (Exception e)
-                        {
-                            logger.Error(e, "Failed to transit collection {Collection}", currentOptions.Collection);
-                            throw;
-                        }
-                    }, token);
+
+                    operations[idx] = Task.Run(async () => await handler!.TransitAsync(dryRun, token), token);
                 }
              
                 logger.Information("Started {N} parallel transit operations", operations.Length);
-                await Task.WhenAll(operations);
+                var results = await Task.WhenAll(operations);
+                totalResults = results.Aggregate(totalResults, (acc, r) => acc + r);
             }
+
+            return totalResults;
         }
 
         private static ICollectionTransitHandler CreateCollectionHandler(CollectionTransitOptions currentOptions,

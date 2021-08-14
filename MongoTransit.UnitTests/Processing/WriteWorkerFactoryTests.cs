@@ -9,7 +9,6 @@ using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoTransit.Extensions;
-using MongoTransit.Notifications;
 using MongoTransit.Notifications.Notifiers;
 using MongoTransit.Processing.Workers;
 using MongoTransit.Storage.Destination;

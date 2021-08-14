@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using AutoFixture;
 using AutoFixture.Xunit2;
 using FluentAssertions;
-using MongoTransit.Notifications;
 using MongoTransit.Notifications.Notifiers;
 using MongoTransit.Options;
 using MongoTransit.Preparation;

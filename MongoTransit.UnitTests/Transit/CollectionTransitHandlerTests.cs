@@ -4,6 +4,7 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using AutoFixture;
 using AutoFixture.Xunit2;
+using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoTransit.Notifications;
@@ -64,7 +65,21 @@ namespace MongoTransit.UnitTests.Transit
         }
         
         [Fact]
-        public async Task TransitAsync_ShouldCompleteWithoutRestore_CollectionUpToDate()
+        public async Task TransitAsync_ShouldReturnEmptyResult_CancelledBeforeOperationStarted()
+        {
+            // Arrange
+            var cts = new CancellationTokenSource(); 
+            
+            // Act
+            cts.Cancel();
+            var actualResults = await _handler.TransitAsync(false, cts.Token);
+            
+            // Assert
+            actualResults.Should().Be(TransferResults.Empty);
+        }
+        
+        [Fact]
+        public async Task TransitAsync_ShouldReturnEmptyResultAndCompleteWithoutRestore_CollectionUpToDate()
         {
             // Arrange
             _collectionPrepareMock.Setup(handler => handler.PrepareCollectionAsync(It.IsAny<IterativeTransitOptions?>(),
@@ -72,16 +87,17 @@ namespace MongoTransit.UnitTests.Transit
                 .ReturnsAsync(new CollectionPrepareResult(SourceFilter.Empty, 0));
             
             // Act
-            await _handler.TransitAsync(false, default);
+            var actual = await _handler.TransitAsync(false, default);
             
             // Assert
+            actual.Should().Be(TransferResults.Empty);
             _sourceMock.Verify(repository => repository.ReadDocumentsAsync(It.IsAny<SourceFilter>(),
                 It.IsAny<ChannelWriter<List<ReplaceOneModel<BsonDocument>>>>(), It.IsAny<int>(), It.IsAny<bool>(),
                 It.IsAny<string[]>(), It.IsAny<bool>(), It.IsAny<IDestinationDocumentFinder>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 
         [Theory, AutoData]
-        public async Task TransitAsync_ShouldCompletedWithAllStepsOfRestore_CollectionHasLag(TransferResults expectedResults)
+        public async Task TransitAsync_ShouldReturnResultFromWriterAndCompleteWithAllStepsOfRestore_CollectionHasLag(TransferResults expectedResults)
         {
             // Arrange
             _collectionPrepareMock.Setup(handler => handler.PrepareCollectionAsync(It.IsAny<IterativeTransitOptions?>(),
@@ -90,9 +106,10 @@ namespace MongoTransit.UnitTests.Transit
             _workerPoolMock.Setup(pool => pool.WriteAsync(It.IsAny<CancellationToken>())).ReturnsAsync(expectedResults);
             
             // Act
-            await _handler.TransitAsync(false, default);
+            var actual = await _handler.TransitAsync(false, default);
             
             // Assert
+            actual.Should().Be(expectedResults);
             _sourceMock.Verify(repository => repository.ReadDocumentsAsync(SourceFilter.Empty,
                 It.IsAny<ChannelWriter<List<ReplaceOneModel<BsonDocument>>>>(), It.IsAny<int>(), It.IsAny<bool>(),
                 It.IsAny<string[]>(), It.IsAny<bool>(), It.IsAny<IDestinationDocumentFinder>(), It.IsAny<CancellationToken>()));

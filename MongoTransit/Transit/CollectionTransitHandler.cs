@@ -46,7 +46,7 @@ namespace MongoTransit.Transit
             _documentsWriterFactory = documentsWriterFactory;
         }
         
-        public async Task TransitAsync(bool dryRun, CancellationToken token)
+        public async Task<TransferResults> TransitAsync(bool dryRun, CancellationToken token)
         {
             _logger.Debug("Starting transit operation");
             var swTransit = new Stopwatch();
@@ -56,18 +56,35 @@ namespace MongoTransit.Transit
             _manager.Attach(_options.Collection, status);
             try
             {
-                await InternalTransit(dryRun, status, token);
+                return await InternalTransit(dryRun, status, token);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.Warning("Collection {Database}.{Collection} transit was cancelled", _options.Database,
+                    _options.Collection);
+                
+                // TODO: return process result
+                return TransferResults.Empty;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to transit collection {Database}.{Collection}", _options.Database,
+                    _options.Collection);
+                throw;
             }
             finally
             {
                 swTransit.Stop();
-                _logger.Debug("Transit finished in {elapsed}", swTransit.Elapsed);
+                _logger.Debug("Collection {Database}.{Collection} transit finished in {elapsed}", _options.Database,
+                    _options.Collection, swTransit.Elapsed);
                 _manager.Detach(_options.Collection);
             }
         }
 
-        private async Task InternalTransit(bool dryRun, TextStatusNotifier progress, CancellationToken token)
+        private async Task<TransferResults> InternalTransit(bool dryRun, TextStatusNotifier progress, CancellationToken token)
         {
+            token.ThrowIfCancellationRequested();
+            
             var transitChannel = Channel.CreateBounded<List<ReplaceOneModel<BsonDocument>>>(_options.Workers);
 
             var (filter, count) = await _preparationHandler.PrepareCollectionAsync(_options.IterativeTransferOptions, progress, token);
@@ -75,7 +92,7 @@ namespace MongoTransit.Transit
             if (count == 0)
             {
                 _logger.Information("Collection {Collection} is up-to date, skipping transit", _options.Collection);
-                return;
+                return TransferResults.Empty;
             }
 
             var notifier = new ProgressNotifier(count);
@@ -86,18 +103,21 @@ namespace MongoTransit.Transit
             var sw = new Stopwatch();
             sw.Start();
 
-            var write = writer.WriteAsync(token);
+            var writeHandler = writer.WriteAsync(token);
 
             await _source.ReadDocumentsAsync(filter, transitChannel, _options.BatchSize,
                 _options.FetchKeyFromDestination, _options.KeyFields ?? Array.Empty<string>(), _options.Upsert,
                 _destination, token);
 
-            var (processed, retried, failed) = await write;
+            var results = await writeHandler;
             sw.Stop();
             
             _logger.Debug("Transfer was completed in {Elapsed}", sw.Elapsed);
-            
-            _logger.Information("Transferred {S}; Retried {R}; Failed {F};", processed, retried, failed);
+
+            _logger.Information("Transferred {S}; Retried {R}; Failed {F};", results.Processed, results.Retried,
+                results.Failed);
+
+            return results;
         }
     }
 }

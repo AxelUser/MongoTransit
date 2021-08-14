@@ -1,5 +1,4 @@
-﻿using MongoTransit.Storage.Source;
-using MongoTransit.Storage.Source.Models;
+﻿using MongoTransit.Storage.Source.Models;
 
 namespace MongoTransit.Preparation
 {

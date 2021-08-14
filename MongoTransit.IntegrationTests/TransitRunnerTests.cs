@@ -128,10 +128,11 @@ namespace MongoTransit.IntegrationTests
                 null)).ToArray(); 
             
             // Act
-            await TransitRunner.RunAsync(CreateLogger(), transitOptions, SingeCycle(), false,
+            var results = await TransitRunner.RunAsync(CreateLogger(), transitOptions, SingeCycle(), false,
                 TimeSpan.FromSeconds(3), CancellationToken.None);
             
             // Assert
+            results.Processed.Should().Be(documentsCount * options.Length);
             foreach (var option in options)
             {
                 var sourceEntities = await SourceClient.GetDatabase(option.Database).GetCollection<Entity>(option.Collection)
@@ -189,10 +190,13 @@ namespace MongoTransit.IntegrationTests
                     .InsertManyAsync(entities);
             }
             
-            await TransitRunner.RunAsync(CreateLogger(), transitOptions, SingeCycle(), false,
+            var secondRunResults = await TransitRunner.RunAsync(CreateLogger(), transitOptions, SingeCycle(), false,
                 TimeSpan.FromSeconds(3), CancellationToken.None);
             
             // Assert
+            secondRunResults.Processed.Should()
+                .BeGreaterThan(secondLoadCount * options.Length).And
+                .BeLessThan((firstLoadCount + secondLoadCount) * options.Length);
             foreach (var option in options)
             {
                 var sourceEntities = await SourceClient.GetDatabase(option.Database).GetCollection<Entity>(option.Collection)

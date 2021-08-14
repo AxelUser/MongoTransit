@@ -2,7 +2,6 @@
 using System.Threading.Channels;
 using MongoDB.Bson;
 using MongoDB.Driver;
-using MongoTransit.Notifications;
 using MongoTransit.Notifications.Notifiers;
 
 namespace MongoTransit.Processing
