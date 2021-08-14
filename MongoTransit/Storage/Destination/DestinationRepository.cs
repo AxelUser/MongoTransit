@@ -6,6 +6,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using MongoTransit.Extensions;
+using MongoTransit.Storage.Destination.Exceptions;
 using Serilog;
 
 namespace MongoTransit.Storage.Destination
@@ -21,9 +23,9 @@ namespace MongoTransit.Storage.Destination
             _logger = logger;
         }
 
-        public async Task ReplaceManyAsync(List<ReplaceOneModel<BsonDocument>> replacements, CancellationToken token)
+        public async Task ReplaceManyAsync(List<ReplaceOneModel<BsonDocument>>? replacements, CancellationToken token)
         {
-            if (!replacements.Any())
+            if (replacements == null || !replacements.Any())
             {
                 _logger.Debug("Empty bulk, skipping");
                 return;
@@ -31,29 +33,67 @@ namespace MongoTransit.Storage.Destination
             
             var sw = new Stopwatch();
             sw.Start();
-            await _collection.BulkWriteAsync(replacements, new BulkWriteOptions
+            try
             {
-                IsOrdered = false,
-                BypassDocumentValidation = true
-            }, token);
-            sw.Stop();
-            
-            _logger.Debug("Processed bulk of {Count:N0} documents in {Elapsed:N1} ms",
-                replacements.Count, sw.ElapsedMilliseconds);
+                await _collection.BulkWriteAsync(replacements, new BulkWriteOptions
+                {
+                    IsOrdered = false,
+                    BypassDocumentValidation = true
+                }, token);
+                sw.Stop();
+
+                _logger.Debug("Successfully processed bulk of {Count:N0} documents in {Elapsed:N1} ms",
+                    replacements.Count, sw.ElapsedMilliseconds);
+            }
+            catch (MongoBulkWriteException<BsonDocument> bwe)
+            {
+                sw.Stop();
+                var errors = bwe.WriteErrors.Select(error => new ReplaceErrorInfo(error.Index, error.Message)).ToList();
+                _logger.Debug("Processed bulk of {Count:N0} documents with {Errors} errors in {Elapsed:N1} ms",
+                    replacements.Count, errors.Count, sw.ElapsedMilliseconds);
+                throw new ReplaceManyException(errors, bwe.Result.ProcessedRequests.Count);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception e)
+            {
+                sw.Stop();
+                _logger.Debug("Failed to process bulk of {Count:N0} documents errors in {Elapsed:N1} ms",
+                    replacements.Count, sw.ElapsedMilliseconds);
+                throw new ReplaceManyException(e);
+            }
+
         }
 
-        public async Task RetryReplaceAsync(FilterDefinition<BsonDocument> filter, BsonDocument replacement, CancellationToken token)
+        public async Task ReplaceDocumentAsync(ReplaceOneModel<BsonDocument> model, CancellationToken token)
         {
             var sw = new Stopwatch();
-            sw.Restart();
-            await _collection.ReplaceOneAsync(filter, replacement, new ReplaceOptions
+            sw.Start();
+            try
             {
-                BypassDocumentValidation = true
-            }, token);
-            sw.Stop();
+                var result = await _collection.ReplaceOneAsync(model.Filter, model.Replacement, new ReplaceOptions
+                {
+                    BypassDocumentValidation = true
+                }, token);
+                sw.Stop();
 
-            _logger.Debug("Successfully retried replacement of document (ID: {Id}) in {Elapsed:N1} ms",
-                replacement["_id"], sw.ElapsedMilliseconds);
+                _logger.Debug(
+                    result.ModifiedCount == 1
+                        ? "Successfully retried replacement of document (ID: {Id}) in {Elapsed:N1} ms"
+                        : "Failed replacement of document (ID: {Id}) in {Elapsed:N1} ms. Document is missing",
+                    model.Replacement["_id"], sw.ElapsedMilliseconds);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception e)
+            {
+                throw new ReplaceOneException($"Failed to replace document: {e.Message}", e);
+            }
+
         }
 
         public async Task DeleteAllDocumentsAsync(CancellationToken token)
@@ -95,7 +135,7 @@ namespace MongoTransit.Storage.Destination
 
         public async Task<BsonDocument> FindDocumentAsync(BsonDocument document, CancellationToken token)
         {
-            var cursor = await _collection.FindAsync(new BsonDocument("_id", document["_id"]),
+            var cursor = await _collection.FindAsync( document.GetFilterBy("_id"),
                 cancellationToken: token);
             return await cursor.SingleOrDefaultAsync(token);
         }

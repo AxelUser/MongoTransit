@@ -1,66 +1,56 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using MongoTransit.Notifications;
 using MongoTransit.Options;
-using MongoTransit.Progress;
+using MongoTransit.Preparation;
+using MongoTransit.Processing;
 using MongoTransit.Storage.Destination;
 using MongoTransit.Storage.Source;
-using MongoTransit.Workers;
 using Serilog;
 
 namespace MongoTransit.Transit
 {
     public static class TransitRunner
     {
-        public static async Task RunAsync(ILogger logger, CollectionTransitOptions[] options,
+        public static async Task<TransferResults> RunAsync(ILogger logger, CollectionTransitOptions[] options,
             IEnumerable<int> cyclesIterator, bool dryRun, TimeSpan notificationInterval, CancellationToken token)
         {
-            var handlers = new CollectionTransitHandler?[options.Length];
-            var operations = new Task[options.Length];
+            var totalResults = TransferResults.Empty;
+            var handlers = new ICollectionTransitHandler?[options.Length];
+            var operations = new Task<TransferResults>[options.Length];
 
-            var progressNotification = StartNotifier(logger, notificationInterval);
-            try
+            var progressManager = new ProgressManager();
+            await using var notification = new NotificationLoop(progressManager, logger, notificationInterval);
+            
+            foreach (var cycle in cyclesIterator)
             {
-                foreach (var cycle in cyclesIterator)
+                token.ThrowIfCancellationRequested();
+                
+                logger.Information("Transition iteration #{Number}", cycle);
+                
+                for (var idx = 0; idx < options.Length; idx++)
                 {
-                    token.ThrowIfCancellationRequested();
-                
-                    logger.Information("Transition iteration #{Number}", cycle);
-                
-                    for (var idx = 0; idx < options.Length; idx++)
-                    {
-                        var currentOptions = options[idx];
+                    var currentOptions = options[idx];
                         
-                        handlers[idx] = handlers[idx] == null ? CreateCollectionHandler(currentOptions, progressNotification, logger) : handlers[idx];
-                        var handler = handlers[idx];
-                        
-                        operations[idx] = Task.Run(async () =>
-                        {
-                            try
-                            {
-                                await handler!.TransitAsync(dryRun, token);
-                            }
-                            catch (Exception e)
-                            {
-                                logger.Error(e, "Failed to transit collection {Collection}", currentOptions.Collection);
-                                throw;
-                            }
-                        }, token);
-                    }
-             
-                    logger.Information("Started {N} parallel transit operations", operations.Length);
-                    await Task.WhenAll(operations);
+                    handlers[idx] = handlers[idx] == null ? CreateCollectionHandler(currentOptions, progressManager, logger) : handlers[idx];
+                    var handler = handlers[idx];
+
+                    operations[idx] = Task.Run(async () => await handler!.TransitAsync(dryRun, token), token);
                 }
+             
+                logger.Information("Started {N} parallel transit operations", operations.Length);
+                var results = await Task.WhenAll(operations);
+                totalResults = results.Aggregate(totalResults, (acc, r) => acc + r);
             }
-            finally
-            {
-                await StopNotifier(progressNotification);
-            }
+
+            return totalResults;
         }
 
-        private static CollectionTransitHandler CreateCollectionHandler(CollectionTransitOptions currentOptions,
-            NotificationLoop progressNotification, ILogger logger)
+        private static ICollectionTransitHandler CreateCollectionHandler(CollectionTransitOptions currentOptions,
+            IProgressManager progressManager, ILogger logger)
         {
             var collectionLogger = logger.ForContext("Scope", currentOptions.Collection);
 
@@ -77,52 +67,9 @@ namespace MongoTransit.Transit
             
             // ReSharper disable once ConstantNullCoalescingCondition
             var handler = new CollectionTransitHandler(sourceFactory, destFactory, preparationHandler,
-                workerPoolFactory, progressNotification.Manager,
+                workerPoolFactory, progressManager,
                 collectionLogger, currentOptions);
             return handler;
-        }
-
-        private record NotificationLoop(Task Loop, ProgressManager Manager, CancellationTokenSource Cancellation);
-
-        private static NotificationLoop StartNotifier(ILogger logger, TimeSpan delay)
-        {
-            var manager = new ProgressManager();
-            var cts = new CancellationTokenSource();
-            var loop = Task.Run(async () =>
-            {
-                logger.Debug("Started notification loop");
-                try
-                {
-                    while (!cts.Token.IsCancellationRequested)
-                    {
-                        await Task.Delay(delay, cts.Token);
-                        if (manager.Available)
-                        {
-                            logger.Information("Progress report:\n{Progress}", manager.GetStatus());    
-                        }
-                    }
-                }
-                finally
-                {
-                    logger.Debug("Stopped notification loop");
-                }
-            }, cts.Token);
-
-            return new NotificationLoop(loop, manager, cts);
-        }
-
-        private static async Task StopNotifier(NotificationLoop loop)
-        {
-            var (task, _, cancellationTokenSource) = loop;
-            cancellationTokenSource.Cancel();
-            try
-            {
-                await task;
-            }
-            catch
-            {
-                // No matter what happened
-            }
         }
     }
 }

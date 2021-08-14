@@ -20,7 +20,11 @@ jobs:
     - name: Build
       run: dotnet build --configuration Release --no-restore
     - name: Unit tests
-      run: dotnet test --no-restore --verbosity normal
+      run: dotnet test --no-restore MongoTransit.UnitTests
+    - name: Create MongoDB Sharded Cluster
+      run: (cd mongo-transit-sharded-cluster && sh init-cluster.sh)
+    - name: Integration tests
+      run: dotnet test --no-restore MongoTransit.IntegrationTests
     - name: Publish Linux x64
       run: dotnet publish MongoTransit/MongoTransit.csproj --configuration Release --runtime linux-x64 -p:PublishSingleFile=true -p:PublishTrimmed=true --no-restore
     - name: Upload MongoTransit executable into build artifacts

@@ -5,6 +5,7 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using MongoTransit.Storage.Source.Models;
 using Serilog;
 
 namespace MongoTransit.Storage.Source
@@ -20,18 +21,18 @@ namespace MongoTransit.Storage.Source
             _logger = logger;
         }
 
-        public async Task ReadDocumentsAsync(BsonDocument filter,
+        public async Task ReadDocumentsAsync(SourceFilter filter,
             ChannelWriter<List<ReplaceOneModel<BsonDocument>>> batchWriter,
             int batchSize,
             bool fetchKeyFromDestination,
             string[] keyFields,
             bool upsert,
-            IDocumentFinder documentFinder,
+            IDestinationDocumentFinder documentFinder,
             CancellationToken token)
         {
             _logger.Debug("Creating a cursor to the source with batch size {Batch}", batchSize);
             using var cursor = await _collection.FindAsync(
-                filter, new FindOptions<BsonDocument>
+                filter.ToBsonDocument(), new FindOptions<BsonDocument>
                 {
                     BatchSize = batchSize
                 }, token);
@@ -40,6 +41,9 @@ namespace MongoTransit.Storage.Source
             {
                 while (await cursor.MoveNextAsync(token))
                 {
+                    if (cursor.Current == null || !cursor.Current.Any())
+                        continue;
+                    
                     var replaceModels = new List<ReplaceOneModel<BsonDocument>>();
                     foreach (var document in cursor.Current)
                     {
@@ -56,16 +60,21 @@ namespace MongoTransit.Storage.Source
             }
         }
         
-        public async Task<long> CountLagAsync(BsonDocument filter, CancellationToken token)
+        public async Task<long> CountLagAsync(SourceFilter filter, CancellationToken token)
         {
-            return await _collection.CountDocumentsAsync(filter, cancellationToken: token);
+            return await _collection.CountDocumentsAsync(filter.ToBsonDocument(), cancellationToken: token);
         }
 
-        private async Task<ReplaceOneModel<BsonDocument>> CreateReplaceModelAsync(BsonDocument document,
+        public async Task<long> CountAllAsync(CancellationToken token)
+        {
+            return await _collection.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: token);
+        }
+
+        private static async Task<ReplaceOneModel<BsonDocument>> CreateReplaceModelAsync(BsonDocument document,
             bool fetchKeyFromDestination,
             string[] keyFields,
             bool upsert,
-            IDocumentFinder documentFinder,
+            IDestinationDocumentFinder documentFinder,
             CancellationToken token)
         {
             var fields = document;

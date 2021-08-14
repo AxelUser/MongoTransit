@@ -4,6 +4,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MongoTransit", "MongoTransi
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MongoTransit.UnitTests", "MongoTransit.UnitTests\MongoTransit.UnitTests.csproj", "{AD7CAC94-C64B-4F78-B7C7-7C4AC4776569}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MongoTransit.IntegrationTests", "MongoTransit.IntegrationTests\MongoTransit.IntegrationTests.csproj", "{FA1A7A8F-4C76-4B18-93F8-64DBD2AA953F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{AD7CAC94-C64B-4F78-B7C7-7C4AC4776569}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AD7CAC94-C64B-4F78-B7C7-7C4AC4776569}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AD7CAC94-C64B-4F78-B7C7-7C4AC4776569}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FA1A7A8F-4C76-4B18-93F8-64DBD2AA953F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FA1A7A8F-4C76-4B18-93F8-64DBD2AA953F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FA1A7A8F-4C76-4B18-93F8-64DBD2AA953F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FA1A7A8F-4C76-4B18-93F8-64DBD2AA953F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

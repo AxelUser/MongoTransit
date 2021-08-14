@@ -7,10 +7,10 @@ using MongoDB.Driver;
 
 namespace MongoTransit.Storage.Destination
 {
-    public interface IDestinationRepository: IDocumentFinder
+    public interface IDestinationRepository: IDestinationDocumentFinder
     {
-        Task ReplaceManyAsync(List<ReplaceOneModel<BsonDocument>> replacements, CancellationToken token);
-        Task RetryReplaceAsync(FilterDefinition<BsonDocument> filter, BsonDocument replacement, CancellationToken token);
+        Task ReplaceManyAsync(List<ReplaceOneModel<BsonDocument>>? replacements, CancellationToken token);
+        Task ReplaceDocumentAsync(ReplaceOneModel<BsonDocument> model, CancellationToken token);
         Task DeleteAllDocumentsAsync(CancellationToken token);
         Task<DateTime?> FindLastCheckpointAsync(string checkpointField, CancellationToken token);
     }
