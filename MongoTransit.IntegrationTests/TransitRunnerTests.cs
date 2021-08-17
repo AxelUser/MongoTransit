@@ -247,21 +247,26 @@ namespace MongoTransit.IntegrationTests
 
             var resultsBefore = await TransitRunner.RunAsync(CreateLogger(), new [] {transitOption}, SingeCycle(), false,
                 TimeSpan.FromSeconds(3), CancellationToken.None);
+            
+            // Wait until all data is acknowledged
+            await Task.Delay(TimeSpan.FromSeconds(10));
 
-            await sourceCollection.UpdateOneAsync(FilterDefinition<Entity>.Empty,
+            await sourceCollection.UpdateManyAsync(FilterDefinition<Entity>.Empty,
                 new UpdateDefinitionBuilder<Entity>()
                     .Inc(e => e.ShardedKey, 100) // Should be transferred at shard for ZoneB
                     .Set(e => e.Modified, originalModified.AddHours(1)));
 
-            await Task.Delay(TimeSpan.FromSeconds(10));
-            
             // Act
             var resultsAfter = await TransitRunner.RunAsync(CreateLogger(), new [] {transitOption}, SingeCycle(), false,
                 TimeSpan.FromSeconds(3), CancellationToken.None);
             
+            // Wait until all data is acknowledged
+            await Task.Delay(TimeSpan.FromSeconds(10));
+            
             // Assert
             resultsBefore.Processed.Should().Be(originalEntities.Length);
             resultsAfter.Retried.Should().Be(originalEntities.Length);
+            
             var sourceEntities = await sourceCollection.Find(FilterDefinition<Entity>.Empty).ToListAsync();
             var destinationEntities = await destinationCollection.Find(FilterDefinition<Entity>.Empty).ToListAsync();
             destinationEntities.Should().BeEquivalentTo(sourceEntities,
