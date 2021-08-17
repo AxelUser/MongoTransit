@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -43,18 +44,40 @@ namespace MongoTransit.IntegrationTests.Helpers
         public async Task UpdateZoneKeyRangeAsync(string databaseName,
             string collectionName,
             string key,
-            string min,
-            string max,
-            string zoneName)
+            ZoneRange zoneRange)
         {
+            var (zone, min, max) = zoneRange;
             VerifyOk(await _adminDb.RunCommandAsync<BsonDocument>(new BsonDocument
                 {
                     ["updateZoneKeyRange"] = $"{databaseName}.{collectionName}",
                     ["min"] = new BsonDocument(key, min),
                     ["max"] = new BsonDocument(key, max),
-                    ["zone"] = zoneName
+                    ["zone"] = zone
                 }),
-                $"Updating zone {zoneName} of collection {databaseName}.{collectionName} with key {key} ranges from {min} to {max}");
+                $"Updating zone {zone} of collection {databaseName}.{collectionName} with key {key} ranges from {min} to {max}");
+        }
+        
+        public async Task<ShardInfo[]> ListShardsAsync()
+        {
+            var listShardsResult = await _adminDb.RunCommandAsync<BsonDocument>(new BsonDocument
+            {
+                ["listShards"] = 1,
+            });
+            
+            VerifyOk(listShardsResult,"Fetching shards");
+
+            return listShardsResult["shards"].AsBsonArray.Select(v => v.AsBsonDocument).Select(s =>
+            {
+                return new ShardInfo()
+                {
+                    Id = s["_id"].AsString,
+                    Zones = s.Contains("tags")
+                        ? s["tags"].AsBsonArray.Select(t => t.AsString).ToArray()
+                        : Array.Empty<string>(),
+                    ReplicaSet = s["host"].AsString.Split('/').First(),
+                    Hosts = s["host"].AsString.Split('/').Last().Split(',')
+                };
+            }).ToArray();
         }
 
         private void VerifyOk(BsonDocument operationResult, string operationName)

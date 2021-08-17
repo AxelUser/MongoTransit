@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using AutoFixture;
 using FluentAssertions;
 using MongoDB.Driver;
+using MongoTransit.IntegrationTests.Helpers;
 using MongoTransit.Options;
 using MongoTransit.Transit;
 using Serilog;
@@ -208,13 +209,77 @@ namespace MongoTransit.IntegrationTests
             }
         }
 
+        [Fact]
+        public async Task RunAsync_ShouldTransferAllDataWithRetries_DestinationCollectionIsSharded_IterativeRestore_ShardedKeyChangedInSource()
+        {
+            // Arrange
+            var transitOption = new CollectionTransitOptions(SourceConnectionString,
+                DestinationConnectionString,
+                "TestDb", "TestC", new[] { nameof(Entity.ShardedKey) }, true, 4, 100, true,
+                new IterativeTransitOptions(nameof(Entity.Modified), TimeSpan.Zero, null));
+            
+            var zonesRanges = new ZoneRange[]
+            {
+                new("ZoneA", 0, 100),
+                new("ZoneB", 100, 200)
+            };
+            var shards = await DestinationHelper.ListShardsAsync();
+            await DestinationHelper.AddShardToZoneAsync(shards[0].Id, zonesRanges[0].Zone);
+            await DestinationHelper.AddShardToZoneAsync(shards[1].Id, zonesRanges[1].Zone);
+
+            var (sourceCollection, destinationCollection) = await CreateCollectionAsync(transitOption.Database, transitOption.Collection);
+
+            foreach (var range in zonesRanges)
+            {
+                await DestinationHelper.UpdateZoneKeyRangeAsync(transitOption.Database, transitOption.Collection,
+                    nameof(Entity.ShardedKey), range);
+            }
+
+            var originalModified = Fixture.Create<DateTime>();
+            var originalEntities = Enumerable.Range(0, 100)
+                .Select(keyValue => Fixture.Build<Entity>()
+                    .With(e => e.ShardedKey, keyValue) // Should be located at shard for ZoneA
+                    .With(e => e.Modified, originalModified)
+                    .Create())
+                .ToArray();
+            
+            await sourceCollection.InsertManyAsync(originalEntities);
+
+            var resultsBefore = await TransitRunner.RunAsync(CreateLogger(), new [] {transitOption}, SingeCycle(), false,
+                TimeSpan.FromSeconds(3), CancellationToken.None);
+
+            await sourceCollection.UpdateOneAsync(FilterDefinition<Entity>.Empty,
+                new UpdateDefinitionBuilder<Entity>()
+                    .Inc(e => e.ShardedKey, 100) // Should be transferred at shard for ZoneB
+                    .Set(e => e.Modified, originalModified.AddHours(1)));
+
+            await Task.Delay(TimeSpan.FromSeconds(10));
+            
+            // Act
+            var resultsAfter = await TransitRunner.RunAsync(CreateLogger(), new [] {transitOption}, SingeCycle(), false,
+                TimeSpan.FromSeconds(3), CancellationToken.None);
+            
+            // Assert
+            resultsBefore.Processed.Should().Be(originalEntities.Length);
+            resultsAfter.Retried.Should().Be(originalEntities.Length);
+            var sourceEntities = await sourceCollection.Find(FilterDefinition<Entity>.Empty).ToListAsync();
+            var destinationEntities = await destinationCollection.Find(FilterDefinition<Entity>.Empty).ToListAsync();
+            destinationEntities.Should().BeEquivalentTo(sourceEntities,
+                $"Destination collection {transitOption.Database}.{transitOption.Collection} should have all documents from source");
+        }
+
         #region additional methods
 
-        private async Task CreateCollectionAsync(string database, string collection)
+        private async Task<(IMongoCollection<Entity> sourceCollection, IMongoCollection<Entity> destinationCollection)> CreateCollectionAsync(string database, string collection)
         {
             await SourceClient.GetDatabase(database).CreateCollectionAsync(collection);
-            await Helper.CreateShardedCollectionAsync(database, collection, nameof(Entity.ShardedKey));
+            await DestinationHelper.CreateShardedCollectionAsync(database, collection, nameof(Entity.ShardedKey));
             _createdCollections.Add((database, collection));
+
+            var source = SourceClient.GetDatabase(database).GetCollection<Entity>(collection);
+            var dest = DestinationClient.GetDatabase(database).GetCollection<Entity>(collection);
+
+            return (source, dest);
         }
 
         private ILogger CreateLogger()
