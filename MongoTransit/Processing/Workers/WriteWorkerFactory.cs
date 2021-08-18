@@ -38,13 +38,12 @@ namespace MongoTransit.Processing.Workers
             _collectionName = collectionName;
         }
         
-        public async Task<WorkerResult> RunWorker(ChannelWriter<ReplaceOneModel<BsonDocument>> failedWrites,
+        public async Task<WorkerResult> RunWorker(ChannelWriter<ReplaceOneModel<BsonDocument>>? failedWrites,
             ILogger workerLogger,
             CancellationToken token)
         {
             var repository = _repositoryFactory.Create(workerLogger);
             var totalSuccessful = 0L;
-            var totalRetryable = 0L;
             var totalFailed = 0L;
             
             await foreach (var batch in _batchReader.ReadAllAsync(token))
@@ -66,8 +65,8 @@ namespace MongoTransit.Processing.Workers
                 catch (ReplaceManyException rme) when(rme.Errors.Any())
                 {
                     // TODO: notify about processed documents besides occurred errors
-                    var retryable = 0;
                     var fails = 0;
+                    var retryable = 0;
 
                     var errSb = new StringBuilder();
                     foreach (var (index, message) in rme.Errors)
@@ -76,7 +75,7 @@ namespace MongoTransit.Processing.Workers
                         errSb.AppendLine($"(ID: {failedRequest.Replacement["_id"]}) {message}");
                         switch (message)
                         {
-                            case ErrorUpdateWithMoveToAnotherShard:
+                            case ErrorUpdateWithMoveToAnotherShard when failedWrites != null:
                                 await failedWrites.WriteAsync(failedRequest, token);
                                 retryable++;
                                 break;
@@ -87,7 +86,6 @@ namespace MongoTransit.Processing.Workers
                     }
 
                     totalFailed += fails;
-                    totalRetryable += retryable;
                     totalSuccessful += rme.ProcessedCount - fails - retryable;
 
                     workerLogger.Error(
@@ -105,7 +103,7 @@ namespace MongoTransit.Processing.Workers
                 }
             } 
             
-            return new WorkerResult(totalSuccessful, totalRetryable, totalFailed);
+            return new WorkerResult(totalSuccessful, totalFailed);
 
         }
 
@@ -143,7 +141,7 @@ namespace MongoTransit.Processing.Workers
                 }
             }
             
-            return new WorkerResult(totalProcessed, 0, totalFailed);
+            return new WorkerResult(totalProcessed, totalFailed);
 
         }
     }

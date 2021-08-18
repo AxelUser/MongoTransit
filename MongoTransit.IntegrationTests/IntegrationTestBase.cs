@@ -16,7 +16,7 @@ namespace MongoTransit.IntegrationTests
         protected readonly string DestinationConnectionString;
         protected readonly IMongoClient SourceClient;
         protected readonly IMongoClient DestinationClient;
-        protected readonly MongoHelper Helper;
+        protected readonly MongoHelper DestinationHelper;
 
         protected IntegrationTestBase()
         {
@@ -26,7 +26,7 @@ namespace MongoTransit.IntegrationTests
             SourceClient = new MongoClient(SourceConnectionString);
             DestinationConnectionString = IntegrationHelper.ConnectionString;
             DestinationClient = new MongoClient(DestinationConnectionString);
-            Helper = new MongoHelper(DestinationClient);
+            DestinationHelper = new MongoHelper(DestinationClient);
         }
 
         public virtual void Dispose()

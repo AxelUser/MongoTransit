@@ -128,7 +128,7 @@ namespace MongoTransit.UnitTests.Processing
 
             // Act
             await WriteBatchAndCloseChannelAsync(_channel, batch);
-            var (successful, _, failed) = await _sut.RunWorker(Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>(), new Mock<ILogger>().Object,
+            var (successful, failed) = await _sut.RunWorker(Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>(), new Mock<ILogger>().Object,
                 CancellationToken.None);
 
             // Assert
@@ -136,10 +136,39 @@ namespace MongoTransit.UnitTests.Processing
             failed.Should().Be(batchSize);
         }
         
+        [Fact]
+        public async Task RunWorker_ShouldReturnZeroCountOfSuccessfulAndFailedDocumentsReplacements_ReplaceIsProcessedWithRetryableErrors_HasRetryChannel()
+        {
+            // Arrange
+            var replacements = Enumerable.Range(0, 100).Select(_ => new BsonDocument
+            {
+                ["_id"] = _fixture.Create<string>(),
+                ["Value"] = _fixture.Create<string>()
+            });
+            var batch = replacements.Select(d => new ReplaceOneModel<BsonDocument>(d.GetFilterBy("_id"), d)).ToList();
+            var exception =
+                new ReplaceManyException(
+                    batch.Select((b, idx) =>
+                        new ReplaceErrorInfo(idx, WriteWorkerFactory.ErrorUpdateWithMoveToAnotherShard)).ToList(),
+                    batch.Count);
+            _destinationRepositoryMock.Setup(r => r.ReplaceManyAsync(batch, It.IsAny<CancellationToken>()))
+                .Throws(exception);
+
+            // Act
+            await WriteBatchAndCloseChannelAsync(_channel, batch);
+            var (successful, failed) = await _sut.RunWorker(Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>(),
+                new Mock<ILogger>().Object,
+                CancellationToken.None);
+
+            // Assert
+            successful.Should().Be(0);
+            failed.Should().Be(0);
+        }
+        
         [Theory]
         [InlineData(10)]
         [InlineData(100)]
-        public async Task RunWorker_ShouldReturnCountOfRetryableDocumentsReplacements_ReplaceIsProcessedWithRetryableErrors(int batchSize)
+        public async Task RunWorker_ShouldReturnCountOfFailedDocumentsReplacements_ReplaceIsProcessedWithRetryableErrors_NullRetryChannel(int batchSize)
         {
             // Arrange
             var replacements = Enumerable.Range(0, batchSize).Select(_ => new BsonDocument
@@ -158,19 +187,17 @@ namespace MongoTransit.UnitTests.Processing
 
             // Act
             await WriteBatchAndCloseChannelAsync(_channel, batch);
-            var (successful, retryable, _) = await _sut.RunWorker(Channel.CreateUnbounded<ReplaceOneModel<BsonDocument>>(),
-                new Mock<ILogger>().Object,
+            var (successful, failed) = await _sut.RunWorker(null, new Mock<ILogger>().Object,
                 CancellationToken.None);
 
             // Assert
-            successful.Should().Be(0);
-            retryable.Should().Be(batchSize);
+            failed.Should().Be(batchSize);
         }
         
         [Theory]
         [InlineData(10)]
         [InlineData(100)]
-        public async Task RunWorker_ShouldSendRetryableDocumentsIntoRetryChannel_ReplaceIsProcessedWithRetryableErrors(int batchSize)
+        public async Task RunWorker_ShouldSendRetryableDocumentsIntoRetryChannel_ReplaceIsProcessedWithRetryableErrors_HasRetryChannel(int batchSize)
         {
             // Arrange
             var replacements = Enumerable.Range(0, batchSize).Select(_ => new BsonDocument
@@ -383,7 +410,7 @@ namespace MongoTransit.UnitTests.Processing
         [Theory]
         [InlineData(10)]
         [InlineData(100)]
-        public async Task RunRetryWorker_ShouldReturnZeroOfRetryableDocumentsReplacements_ReplacesAreProcessedWithRetryableErrors(int retriesCount)
+        public async Task RunRetryWorker_ShouldReturnZeroOfSuccessfulDocumentsReplacements_ReplacesAreProcessedWithRetryableErrors(int retriesCount)
         {
             // Arrange
             var retries = Enumerable.Range(0, retriesCount)
@@ -407,7 +434,7 @@ namespace MongoTransit.UnitTests.Processing
                 CancellationToken.None);
 
             // Assert
-            result.Retryable.Should().Be(0);
+            result.Successful.Should().Be(0);
         }
         
         [Theory]
