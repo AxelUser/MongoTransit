@@ -13,7 +13,7 @@ This is a tool for automatic replication of documents from one MongoDB to anothe
 - `--dry`: Run tool without inserting or updating records.
 - `--logs`: Directory for storing logs. By default they will be stored in current directory.
 - `-n`, `--notify`: Notification interval in seconds. *Default: 3.*
-- `-w`, `--workers`: Amount of insertion/retry workers per each CPU (core). *Default: 4.*
+- `-w`, `--workers`: Degree of parallelization for inserts, value is amount per each CPU (core). *Default: 4.*
 - `-b`, `--batchSize`: Batch size for insertion. *Default: 1000.*
 
 ## Config file
