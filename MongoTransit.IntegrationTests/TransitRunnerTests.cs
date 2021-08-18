@@ -261,7 +261,7 @@ namespace MongoTransit.IntegrationTests
                 TimeSpan.FromSeconds(3), CancellationToken.None);
             
             // Wait until all data is acknowledged
-            await Task.Delay(TimeSpan.FromSeconds(10));
+            await Task.Delay(TimeSpan.FromSeconds(20));
             
             // Assert
             resultsBefore.Processed.Should().Be(originalEntities.Length);
