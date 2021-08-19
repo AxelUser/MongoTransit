@@ -133,7 +133,7 @@ namespace MongoTransit.Storage.Destination
             return checkpointBson[checkpointField].ToUniversalTime();
         }
 
-        public async Task<BsonDocument> FindDocumentAsync(BsonDocument document, CancellationToken token)
+        public async Task<BsonDocument?> FindDocumentAsync(BsonDocument document, CancellationToken token)
         {
             var cursor = await _collection.FindAsync( document.GetFilterBy("_id"),
                 cancellationToken: token);

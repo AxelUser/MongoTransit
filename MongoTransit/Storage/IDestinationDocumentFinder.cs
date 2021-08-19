@@ -6,6 +6,6 @@ namespace MongoTransit.Storage
 {
     public interface IDestinationDocumentFinder
     {
-        public Task<BsonDocument> FindDocumentAsync(BsonDocument document, CancellationToken token);
+        public Task<BsonDocument?> FindDocumentAsync(BsonDocument document, CancellationToken token);
     }
 }

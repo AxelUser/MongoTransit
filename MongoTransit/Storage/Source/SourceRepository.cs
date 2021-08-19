@@ -88,17 +88,17 @@ namespace MongoTransit.Storage.Source
                 }
             }
 
-            var filter = new BsonDocument();
+            var filter = new BsonDocumentFilterDefinition<BsonDocument>(new BsonDocument());
             if (keyFields.Any())
             {
                 foreach (var field in keyFields)
                 {
-                    filter[field] = fields[field];
+                    filter.Document[field] = fields[field];
                 }
             }
             else
             {
-                filter["_id"] = fields["_id"];
+                filter.Document["_id"] = fields["_id"];
             }
 
             var model = new ReplaceOneModel<BsonDocument>(filter, document)
