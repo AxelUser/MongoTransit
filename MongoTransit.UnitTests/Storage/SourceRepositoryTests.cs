@@ -39,15 +39,14 @@ namespace MongoTransit.UnitTests.Storage
         {
             // Arrange
             var channel = Channel.CreateUnbounded<List<ReplaceOneModel<BsonDocument>>>();
-            var finderMock = new Mock<IDestinationDocumentFinder>();
             await _sourceCollection.InsertManyAsync(Enumerable.Range(0, 100).Select(_ => new BsonDocument
             {
                 ["Value"] = Fixture.Create<string>(),
             }));
 
             // Act
-            await _sut.ReadDocumentsAsync(SourceFilter.Empty, channel, 10, false, Array.Empty<string>(),
-                false, finderMock.Object, CancellationToken.None);
+            await _sut.ReadDocumentsAsync(SourceFilter.Empty, channel, 10, Array.Empty<string>(),
+                false, null, CancellationToken.None);
 
             // Assert
             var actual = await ReadDocumentsFromChannelAsync(channel);
@@ -60,7 +59,6 @@ namespace MongoTransit.UnitTests.Storage
         {
             // Arrange
             var channel = Channel.CreateUnbounded<List<ReplaceOneModel<BsonDocument>>>();
-            var finderMock = new Mock<IDestinationDocumentFinder>();
             var currentDate = DateTime.UtcNow;
             await _sourceCollection.InsertManyAsync(Enumerable.Range(0, 100).Select(idx => new BsonDocument
             {
@@ -69,8 +67,8 @@ namespace MongoTransit.UnitTests.Storage
             var filerByDate = new SourceFilter("Modified", currentDate.AddMinutes(50));
 
             // Act
-            await _sut.ReadDocumentsAsync(filerByDate, channel, 10, false, Array.Empty<string>(),
-                false, finderMock.Object, CancellationToken.None);
+            await _sut.ReadDocumentsAsync(filerByDate, channel, 10, Array.Empty<string>(),
+                false, null, CancellationToken.None);
             
             // Assert
             var actual = await ReadDocumentsFromChannelAsync(channel);
@@ -86,15 +84,14 @@ namespace MongoTransit.UnitTests.Storage
         {
             // Arrange
             var channel = Channel.CreateUnbounded<List<ReplaceOneModel<BsonDocument>>>();
-            var finderMock = new Mock<IDestinationDocumentFinder>();
             await _sourceCollection.InsertManyAsync(Enumerable.Range(0, 100).Select(_ => new BsonDocument
             {
                 ["Value"] = Fixture.Create<string>(),
             }));
 
             // Act
-            await _sut.ReadDocumentsAsync(SourceFilter.Empty, channel, batchSize, false, Array.Empty<string>(),
-                false, finderMock.Object, CancellationToken.None);
+            await _sut.ReadDocumentsAsync(SourceFilter.Empty, channel, batchSize, Array.Empty<string>(),
+                false, null, CancellationToken.None);
 
             // Assert
             var actual = await ReadReplaceBatchesFromChannelAsync(channel);
@@ -116,8 +113,8 @@ namespace MongoTransit.UnitTests.Storage
             }));
             
             // Act
-            await _sut.ReadDocumentsAsync(SourceFilter.Empty, channel, 10, false, Array.Empty<string>(),
-                false, finderMock.Object, CancellationToken.None);
+            await _sut.ReadDocumentsAsync(SourceFilter.Empty, channel, 10, Array.Empty<string>(),
+                false, null, CancellationToken.None);
             
             // Assert
             finderMock.VerifyNoOtherCalls();
@@ -144,7 +141,7 @@ namespace MongoTransit.UnitTests.Storage
             var finder = new DestinationRepository(destinationCollection, new Mock<ILogger>().Object);
 
             // Act
-            await _sut.ReadDocumentsAsync(SourceFilter.Empty, channel, 10, true, new[] { "Key" },
+            await _sut.ReadDocumentsAsync(SourceFilter.Empty, channel, 10, new[] { "Key" },
                 false, finder, CancellationToken.None);
             
             // Assert
@@ -167,8 +164,8 @@ namespace MongoTransit.UnitTests.Storage
             }));
 
             // Act
-            await _sut.ReadDocumentsAsync(SourceFilter.Empty, channel, 10, false, Array.Empty<string>(),
-                false, finderMock.Object, CancellationToken.None);
+            await _sut.ReadDocumentsAsync(SourceFilter.Empty, channel, 10, Array.Empty<string>(),
+                false, null, CancellationToken.None);
 
             // Assert
             var actualFilters = (await ReadReplacesFromChannelAsync(channel)).Select(model =>

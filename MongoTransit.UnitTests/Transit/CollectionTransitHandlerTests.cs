@@ -92,7 +92,7 @@ namespace MongoTransit.UnitTests.Transit
             // Assert
             actual.Should().Be(TransferResults.Empty);
             _sourceMock.Verify(repository => repository.ReadDocumentsAsync(It.IsAny<SourceFilter>(),
-                It.IsAny<ChannelWriter<List<ReplaceOneModel<BsonDocument>>>>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<ChannelWriter<List<ReplaceOneModel<BsonDocument>>>>(), It.IsAny<int>(),
                 It.IsAny<string[]>(), It.IsAny<bool>(), It.IsAny<IDestinationDocumentFinder>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 
@@ -111,7 +111,7 @@ namespace MongoTransit.UnitTests.Transit
             // Assert
             actual.Should().Be(expectedResults);
             _sourceMock.Verify(repository => repository.ReadDocumentsAsync(SourceFilter.Empty,
-                It.IsAny<ChannelWriter<List<ReplaceOneModel<BsonDocument>>>>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<ChannelWriter<List<ReplaceOneModel<BsonDocument>>>>(), It.IsAny<int>(),
                 It.IsAny<string[]>(), It.IsAny<bool>(), It.IsAny<IDestinationDocumentFinder>(), It.IsAny<CancellationToken>()));
             _workerPoolMock.Verify(pool => pool.WriteAsync(It.IsAny<CancellationToken>()));
         }
