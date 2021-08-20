@@ -8,13 +8,13 @@ using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoTransit.Extensions;
+using MongoTransit.IntegrationTests.Extensions;
 using MongoTransit.Storage.Destination;
-using MongoTransit.UnitTests.Extensions;
 using Moq;
 using Serilog;
 using Xunit;
 
-namespace MongoTransit.UnitTests.Storage
+namespace MongoTransit.IntegrationTests.Storage
 {
     public class DestinationRepositoryTests: RepositoriesTestBase
     {
