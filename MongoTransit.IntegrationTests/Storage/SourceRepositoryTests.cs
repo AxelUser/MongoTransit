@@ -18,7 +18,6 @@ using Xunit;
 
 namespace MongoTransit.IntegrationTests.Storage
 {
-    
     public class SourceRepositoryTests: RepositoriesTestBase
     {
         private readonly IMongoCollection<BsonDocument> _sourceCollection;
