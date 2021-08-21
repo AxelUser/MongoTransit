@@ -280,24 +280,27 @@ namespace MongoTransit.IntegrationTests.Storage
 
         #endregion
 
-        #region FindDocumentAsync
+        #region FindDocumentsAsync
 
         [Fact]
-        public async Task FindDocumentAsync_ShouldReturnNull_EmptyCollection()
+        public async Task FindDocumentsAsync_ShouldReturnEmptyCollection_EmptyCollection()
         {
             // Act
-            var actual = await _sut.FindDocumentAsync(new BsonDocument
+            var actual = await _sut.FindDocumentsAsync(new []
             {
-                ["_id"] = Fixture.Create<string>(),
-                ["Value"] = Fixture.Create<string>(),
+                new BsonDocument
+                {
+                    ["_id"] = Fixture.Create<string>(),
+                    ["Value"] = Fixture.Create<string>(),
+                }
             }, CancellationToken.None);
 
             // Assert
-            actual.Should().BeNull();
+            actual.Should().BeEmpty();
         }
         
         [Fact]
-        public async Task FindDocumentAsync_ShouldReturnNull_MissingDocument()
+        public async Task FindDocumentsAsync_ShouldReturnEmptyCollection_MissingDocument()
         {
             // Arrange
             await _destCollection.InsertOneAsync(new BsonDocument
@@ -307,18 +310,21 @@ namespace MongoTransit.IntegrationTests.Storage
             });
             
             // Act
-            var actual = await _sut.FindDocumentAsync(new BsonDocument
+            var actual = await _sut.FindDocumentsAsync(new []
             {
-                ["_id"] = Fixture.Create<string>(),
-                ["Value"] = Fixture.Create<string>(),
+                new BsonDocument
+                {
+                    ["_id"] = Fixture.Create<string>(),
+                    ["Value"] = Fixture.Create<string>(),
+                }
             }, CancellationToken.None);
 
             // Assert
-            actual.Should().BeNull();
+            actual.Should().BeEmpty();
         }
         
         [Fact]
-        public async Task FindDocumentAsync_ShouldReturnDocument_CollectionHasSameDocument()
+        public async Task FindDocumentsAsync_ShouldReturnDocument_CollectionHasSameDocument()
         {
             // Arrange
             var target = new BsonDocument
@@ -331,14 +337,14 @@ namespace MongoTransit.IntegrationTests.Storage
             }).Append(target));
             
             // Act
-            var actual = await _sut.FindDocumentAsync(target, CancellationToken.None);
+            var actual = await _sut.FindDocumentsAsync(new[] { target }, CancellationToken.None);
 
             // Assert
-            actual.Should().BeEquivalentTo(target);
+            actual.Should().BeEquivalentTo(new[] { target });
         }
         
         [Fact]
-        public async Task FindDocumentAsync_ShouldReturnDocumentWithSameId_CollectionHasDocumentWithId()
+        public async Task FindDocumentsAsync_ShouldReturnDocumentWithSameId_CollectionHasDocumentWithId()
         {
             // Arrange
             var target = new BsonDocument
@@ -351,14 +357,17 @@ namespace MongoTransit.IntegrationTests.Storage
             }).Append(target));
             
             // Act
-            var actual = await _sut.FindDocumentAsync(new BsonDocument
+            var actual = await _sut.FindDocumentsAsync(new[]
             {
-                ["_id"] = target["_id"],
-                ["Value"] = Fixture.Create<string>(),
+                new BsonDocument
+                {
+                    ["_id"] = target["_id"],
+                    ["Value"] = Fixture.Create<string>(),
+                }
             }, CancellationToken.None);
 
             // Assert
-            actual.Should().BeEquivalentTo(target);
+            actual.Should().BeEquivalentTo(new[] { target });
         }
 
         #endregion

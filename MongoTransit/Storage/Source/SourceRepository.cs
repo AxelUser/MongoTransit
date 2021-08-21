@@ -42,15 +42,23 @@ namespace MongoTransit.Storage.Source
                 {
                     if (cursor.Current == null || !cursor.Current.Any())
                         continue;
-                    
-                    var replaceModels = new List<ReplaceOneModel<BsonDocument>>();
-                    foreach (var document in cursor.Current)
+                    var currentBatch = cursor.Current.ToList();
+
+                    var destinationDocuments = new Dictionary<BsonValue, BsonDocument>();
+                    if (documentFinder != null)
                     {
-                        var sourceDocument = documentFinder == null
-                            ? document
-                            : await documentFinder.FindDocumentAsync(document, token) ?? document;
-                        replaceModels.Add(CreateReplaceModel(sourceDocument, keyFields, upsert));
+                        var dest = await documentFinder.FindDocumentsAsync(currentBatch, token);
+                        foreach (var doc in dest)
+                        {
+                            destinationDocuments[doc["_id"]] = doc;
+                        }
                     }
+
+                    var replaceModels = currentBatch.Select(srcDoc => CreateReplaceModel(
+                            destinationDocuments.TryGetValue(srcDoc["_id"], out var destDoc)
+                                ? destDoc
+                                : srcDoc, keyFields, upsert))
+                        .ToList();
 
                     await batchWriter.WriteAsync(replaceModels, token);
                 }
