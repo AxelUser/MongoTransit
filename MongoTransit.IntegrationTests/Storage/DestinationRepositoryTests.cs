@@ -280,27 +280,27 @@ namespace MongoTransit.IntegrationTests.Storage
 
         #endregion
 
-        #region FindDocumentsAsync
+        #region GetFieldsAsync
 
         [Fact]
-        public async Task FindDocumentsAsync_ShouldReturnEmptyList_CollectionIsEmpty()
+        public async Task GetFieldsAsync_ShouldReturnEmptyList_CollectionIsEmpty()
         {
             // Act
-            var actual = await _sut.FindDocumentsAsync(new []
+            var actual = await _sut.GetFieldsAsync(new []
             {
                 new BsonDocument
                 {
                     ["_id"] = Fixture.Create<string>(),
                     ["Value"] = Fixture.Create<string>(),
                 }
-            }, CancellationToken.None);
+            }, null, CancellationToken.None);
 
             // Assert
             actual.Should().BeEmpty();
         }
         
         [Fact]
-        public async Task FindDocumentsAsync_ShouldReturnEmptyList_MissingDocument()
+        public async Task GetFieldsAsync_ShouldReturnEmptyList_MissingDocument()
         {
             // Arrange
             await _destCollection.InsertOneAsync(new BsonDocument
@@ -310,14 +310,14 @@ namespace MongoTransit.IntegrationTests.Storage
             });
             
             // Act
-            var actual = await _sut.FindDocumentsAsync(new []
+            var actual = await _sut.GetFieldsAsync(new []
             {
                 new BsonDocument
                 {
                     ["_id"] = Fixture.Create<string>(),
                     ["Value"] = Fixture.Create<string>(),
                 }
-            }, CancellationToken.None);
+            }, null, CancellationToken.None);
 
             // Assert
             actual.Should().BeEmpty();
@@ -326,7 +326,7 @@ namespace MongoTransit.IntegrationTests.Storage
         [Theory]
         [InlineData(1)]
         [InlineData(5)]
-        public async Task FindDocumentsAsync_ShouldReturnOnlyDocumentWithSameId_CollectionHasDocumentsWithTargetedIds(int documentsCount)
+        public async Task GetFieldsAsync_ShouldReturnOnlyDocumentsWithSameId_CollectionHasDocumentsWithTargetedIds_NoFieldsProvided(int documentsCount)
         {
             // Arrange
             var targets = Enumerable.Range(0, documentsCount).Select(_ => new BsonDocument
@@ -339,10 +339,41 @@ namespace MongoTransit.IntegrationTests.Storage
             }).Concat(targets));
             
             // Act
-            var actual = await _sut.FindDocumentsAsync(targets, CancellationToken.None);
+            var actual = await _sut.GetFieldsAsync(targets, null, CancellationToken.None);
 
             // Assert
-            actual.Should().BeEquivalentTo(targets);
+            actual.Should().BeEquivalentTo(targets.Select(d => new BsonDocument("_id", d["_id"])));
+        }
+        
+        [Theory]
+        [InlineData(1)]
+        [InlineData(5)]
+        public async Task GetFieldsAsync_ShouldReturnOnlyIdAndSpecifiedFields_CollectionHasDocumentsWithTargetedIds_FieldsProvided(int documentsCount)
+        {
+            // Arrange
+            var fields = new[] { "Key1", "Key2" };
+            var targets = Enumerable.Range(0, documentsCount).Select(_ => new BsonDocument
+            {
+                ["Key1"] = Fixture.Create<string>(),
+                ["Key2"] = Fixture.Create<string>(),
+                ["Value"] = Fixture.Create<string>(),
+            }).ToList();
+            await _destCollection.InsertManyAsync(Enumerable.Range(0, 10).Select(_ => new BsonDocument
+            {
+                ["Value"] = Fixture.Create<string>()
+            }).Concat(targets));
+            
+            // Act
+            var actual = await _sut.GetFieldsAsync(targets, fields, CancellationToken.None);
+
+            // Assert
+            actual.Select(d => new BsonDocument("_id", d["_id"])).Should()
+                .BeEquivalentTo(targets.Select(d => new BsonDocument("_id", d["_id"])));
+
+            foreach (var actualDoc in actual)
+            {
+                actualDoc.Names.Should().BeEquivalentTo(fields.Append("_id"));
+            }
         }
 
         #endregion

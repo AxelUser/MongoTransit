@@ -7,7 +7,8 @@ namespace MongoTransit.Storage
 {
     public interface IDestinationDocumentFinder
     {
-        public Task<List<BsonDocument>> FindDocumentsAsync(IReadOnlyCollection<BsonDocument> documents,
+        public Task<List<BsonDocument>> GetFieldsAsync(IReadOnlyCollection<BsonDocument> targetedDocuments,
+            string[] fields,
             CancellationToken token);
     }
 }

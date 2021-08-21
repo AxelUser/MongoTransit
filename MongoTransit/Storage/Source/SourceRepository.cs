@@ -47,7 +47,7 @@ namespace MongoTransit.Storage.Source
                     var destinationDocuments = new Dictionary<BsonValue, BsonDocument>();
                     if (documentFinder != null)
                     {
-                        var dest = await documentFinder.FindDocumentsAsync(currentBatch, token);
+                        var dest = await documentFinder.GetFieldsAsync(currentBatch, keyFields, token);
                         foreach (var doc in dest)
                         {
                             destinationDocuments[doc["_id"]] = doc;
