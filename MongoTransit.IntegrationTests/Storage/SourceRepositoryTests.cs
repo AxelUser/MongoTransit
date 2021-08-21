@@ -121,19 +121,20 @@ namespace MongoTransit.IntegrationTests.Storage
         }
         
         [Fact]
-        public async Task ReadDocumentsAsync_ShouldGetFilterKeysFromDestination_KeyFetchIsEnabled()
+        public async Task ReadDocumentsAsync_ShouldGetFilterKeysFromDestinationAndReplacementsFromSource_KeyFetchIsEnabled()
         {
             // Arrange
             var channel = Channel.CreateUnbounded<List<ReplaceOneModel<BsonDocument>>>();
             await _sourceCollection.InsertManyAsync(Enumerable.Range(0, 100).Select(idx => new BsonDocument
             {
                 ["Key"] = $"source_{idx}",
-                ["Value"] = Fixture.Create<string>(),
+                ["Value"] = $"source_{Fixture.Create<string>()}",
             }));
             var (_, destinationCollection) = CreateConnection();
             var destValues = _sourceCollection.FindSync(new BsonDocument()).ToList().Select(document =>
             {
                 document["Key"] = document["Key"].AsString.Replace("source_", "destination_");
+                document["Value"] = document["Value"].AsString.Replace("source_", "destination_");
                 return document;
             });
             await destinationCollection.InsertManyAsync(destValues);
@@ -145,11 +146,15 @@ namespace MongoTransit.IntegrationTests.Storage
                 false, finder, CancellationToken.None);
             
             // Assert
-            var actualFilters = (await ReadReplacesFromChannelAsync(channel)).Select(model =>
+            var actualModels = await ReadReplacesFromChannelAsync(channel);
+            var actualReplaceFilters = actualModels.Select(model =>
                 model.Filter.Render(_sourceCollection.DocumentSerializer,
                     _sourceCollection.Settings.SerializerRegistry));
-            actualFilters.Should().OnlyContain(filter =>
+            var actualReplacements = actualModels.Select(model => model.Replacement);
+            actualReplaceFilters.Should().OnlyContain(filter =>
                 filter["Key"].AsString.StartsWith("destination_") && filter.Names.Count() == 1);
+            actualReplacements.Should().OnlyContain(r =>
+                r["Key"].AsString.StartsWith("source_") && r["Value"].AsString.StartsWith("source_"));
         }
         
         [Fact]

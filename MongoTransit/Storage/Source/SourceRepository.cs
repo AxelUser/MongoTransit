@@ -57,7 +57,7 @@ namespace MongoTransit.Storage.Source
                     var replaceModels = currentBatch.Select(srcDoc => CreateReplaceModel(
                             destinationDocuments.TryGetValue(srcDoc["_id"], out var destDoc)
                                 ? destDoc
-                                : srcDoc, keyFields, upsert))
+                                : srcDoc, srcDoc, keyFields, upsert))
                         .ToList();
 
                     await batchWriter.WriteAsync(replaceModels, token);
@@ -79,7 +79,7 @@ namespace MongoTransit.Storage.Source
             return await _collection.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: token);
         }
 
-        private static ReplaceOneModel<BsonDocument> CreateReplaceModel(BsonDocument document,
+        private static ReplaceOneModel<BsonDocument> CreateReplaceModel(BsonDocument filterFields, BsonDocument replacement,
             string[] keyFields,
             bool upsert)
         {
@@ -88,15 +88,15 @@ namespace MongoTransit.Storage.Source
             {
                 foreach (var field in keyFields)
                 {
-                    filter.Document[field] = document[field];
+                    filter.Document[field] = filterFields[field];
                 }
             }
             else
             {
-                filter.Document["_id"] = document["_id"];
+                filter.Document["_id"] = filterFields["_id"];
             }
 
-            var model = new ReplaceOneModel<BsonDocument>(filter, document)
+            var model = new ReplaceOneModel<BsonDocument>(filter, replacement)
             {
                 IsUpsert = upsert
             };
