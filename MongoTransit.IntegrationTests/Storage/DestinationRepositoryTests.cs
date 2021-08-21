@@ -63,20 +63,18 @@ namespace MongoTransit.IntegrationTests.Storage
         public async Task FindLastCheckpointAsync_ShouldReturnMaxCheckpointValue_HasCheckpointValuesInCollection()
         {
             // Arrange
-            // Truncate checkpoint value due to differences in MongoDb and .Net resolution of DateTime, so
-            // assertion will be easier
-            var lastCheckpoint = DateTime.UtcNow.Truncate(TimeSpan.FromSeconds(1));
+            var lastCheckpoint = Fixture.CreateMongoDbDate().ToUniversalTime();
             await _destCollection.InsertManyAsync(Enumerable.Range(0, 10)
                 .Select(offset => new BsonDocument
                 {
-                    ["Modified"] = new BsonDateTime(lastCheckpoint.AddMinutes(-offset))
+                    ["Modified"] = new BsonDateTime(lastCheckpoint.AddSeconds(-offset))
                 }));
-            
+
             // Act
             var actual = await _sut.FindLastCheckpointAsync("Modified", CancellationToken.None);
-            
+
             // Assert
-            actual.Should().Be(lastCheckpoint.AddMilliseconds(-lastCheckpoint.Millisecond));
+            actual.Should().Be(lastCheckpoint);
         }
 
         #endregion
