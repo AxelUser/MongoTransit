@@ -1,4 +1,4 @@
-name: .NET
+name: MongoTransit new version release
 
 on:
   push:
@@ -22,7 +22,7 @@ jobs:
     - name: Unit tests
       run: dotnet test --no-restore MongoTransit.UnitTests
     - name: Create MongoDB Sharded Cluster
-      run: (cd mongo-transit-sharded-cluster && sh init-cluster.sh)
+      run: (cd docker-compose && sh init-cluster.sh)
     - name: Integration tests
       run: dotnet test --no-restore MongoTransit.IntegrationTests
     - name: Publish Linux x64
