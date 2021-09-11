@@ -6,7 +6,7 @@ using Mongo2Go;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
-namespace MongoTransit.UnitTests.Storage
+namespace MongoTransit.IntegrationTests.Storage
 {
     public abstract class RepositoriesTestBase: IDisposable
     {

@@ -1,5 +1,4 @@
 #!/bin/bash
-
 echo "Init cluster step 1: Start all of the containers"
 docker-compose up -d
 

@@ -133,11 +133,20 @@ namespace MongoTransit.Storage.Destination
             return checkpointBson[checkpointField].ToUniversalTime();
         }
 
-        public async Task<BsonDocument> FindDocumentAsync(BsonDocument document, CancellationToken token)
+        public async Task<List<BsonDocument>> GetFieldsAsync(IReadOnlyCollection<BsonDocument> targetedDocuments,
+            string[]? fields,
+            CancellationToken token)
         {
-            var cursor = await _collection.FindAsync( document.GetFilterBy("_id"),
-                cancellationToken: token);
-            return await cursor.SingleOrDefaultAsync(token);
+            var projection = (fields ?? new[] { "_id" }).Aggregate(new BsonDocument(), (projection, field) =>
+            {
+                projection[field] = true;
+                return projection;
+            });
+            var cursor = await _collection.FindAsync( targetedDocuments.GetInFilterBy("_id"), new FindOptions<BsonDocument>
+            {
+                Projection = new BsonDocumentProjectionDefinition<BsonDocument, BsonDocument>(projection)
+            }, token);
+            return await cursor.ToListAsync(token);
         }
     }
 }

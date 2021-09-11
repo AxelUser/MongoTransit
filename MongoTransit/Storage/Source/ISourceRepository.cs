@@ -13,10 +13,9 @@ namespace MongoTransit.Storage.Source
         Task ReadDocumentsAsync(SourceFilter filter,
             ChannelWriter<List<ReplaceOneModel<BsonDocument>>> batchWriter,
             int batchSize,
-            bool fetchKeyFromDestination,
             string[] keyFields,
             bool upsert,
-            IDestinationDocumentFinder documentFinder,
+            IDestinationDocumentFinder? documentFinder,
             CancellationToken token = default);
 
         Task<long> CountLagAsync(SourceFilter filter, CancellationToken token);

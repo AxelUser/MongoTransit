@@ -24,10 +24,9 @@ namespace MongoTransit.Storage.Source
         public async Task ReadDocumentsAsync(SourceFilter filter,
             ChannelWriter<List<ReplaceOneModel<BsonDocument>>> batchWriter,
             int batchSize,
-            bool fetchKeyFromDestination,
             string[] keyFields,
             bool upsert,
-            IDestinationDocumentFinder documentFinder,
+            IDestinationDocumentFinder? documentFinder,
             CancellationToken token)
         {
             _logger.Debug("Creating a cursor to the source with batch size {Batch}", batchSize);
@@ -43,13 +42,23 @@ namespace MongoTransit.Storage.Source
                 {
                     if (cursor.Current == null || !cursor.Current.Any())
                         continue;
-                    
-                    var replaceModels = new List<ReplaceOneModel<BsonDocument>>();
-                    foreach (var document in cursor.Current)
+                    var currentBatch = cursor.Current.ToList();
+
+                    var destinationDocuments = new Dictionary<BsonValue, BsonDocument>();
+                    if (documentFinder != null)
                     {
-                        replaceModels.Add(await CreateReplaceModelAsync(document, fetchKeyFromDestination,
-                            keyFields, upsert, documentFinder, token));
+                        var dest = await documentFinder.GetFieldsAsync(currentBatch, keyFields, token);
+                        foreach (var doc in dest)
+                        {
+                            destinationDocuments[doc["_id"]] = doc;
+                        }
                     }
+
+                    var replaceModels = currentBatch.Select(srcDoc => CreateReplaceModel(
+                            destinationDocuments.TryGetValue(srcDoc["_id"], out var destDoc)
+                                ? destDoc
+                                : srcDoc, srcDoc, keyFields, upsert))
+                        .ToList();
 
                     await batchWriter.WriteAsync(replaceModels, token);
                 }
@@ -70,38 +79,24 @@ namespace MongoTransit.Storage.Source
             return await _collection.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: token);
         }
 
-        private static async Task<ReplaceOneModel<BsonDocument>> CreateReplaceModelAsync(BsonDocument document,
-            bool fetchKeyFromDestination,
+        private static ReplaceOneModel<BsonDocument> CreateReplaceModel(BsonDocument filterFields, BsonDocument replacement,
             string[] keyFields,
-            bool upsert,
-            IDestinationDocumentFinder documentFinder,
-            CancellationToken token)
+            bool upsert)
         {
-            var fields = document;
-            if (fetchKeyFromDestination)
-            {
-                // TODO maybe defer and put it in batch
-                var foundDestinationDoc = await documentFinder.FindDocumentAsync(document, token);
-                if (foundDestinationDoc != null)
-                {
-                    fields = foundDestinationDoc;
-                }
-            }
-
-            var filter = new BsonDocument();
+            var filter = new BsonDocumentFilterDefinition<BsonDocument>(new BsonDocument());
             if (keyFields.Any())
             {
                 foreach (var field in keyFields)
                 {
-                    filter[field] = fields[field];
+                    filter.Document[field] = filterFields[field];
                 }
             }
             else
             {
-                filter["_id"] = fields["_id"];
+                filter.Document["_id"] = filterFields["_id"];
             }
 
-            var model = new ReplaceOneModel<BsonDocument>(filter, document)
+            var model = new ReplaceOneModel<BsonDocument>(filter, replacement)
             {
                 IsUpsert = upsert
             };
