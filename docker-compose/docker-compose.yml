@@ -187,5 +187,13 @@ services:
       - ./scripts:/scripts
     ports:
       - "27130:27017"
-
   
+## MongoDb source as standalone
+  standalone:
+    image: "mongo:${MONGO_TAG:-latest}"
+    container_name: mongodb-source
+    restart: always
+    healthcheck:
+      test: [ "CMD", "mongo", "--quiet", "--eval", "db.runCommand(\"ping\").ok" ]
+    ports:
+      - "27131:27017"

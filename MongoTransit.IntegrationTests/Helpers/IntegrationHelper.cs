@@ -1,8 +1,8 @@
 using MongoDB.Driver;
 
-namespace MongoTransit.IntegrationTests
+namespace MongoTransit.IntegrationTests.Helpers
 {
-    public class IntegrationHelper
+    public static class IntegrationHelper
     {
         public const string ConnectionString = "mongodb://localhost:27117";
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "Init cluster step 1: Start all of the containers"
-docker-compose up -d
+docker-compose up -d --force-recreate
 
 echo "Waiting 20 seconds for all containers to start"
 sleep 20s
