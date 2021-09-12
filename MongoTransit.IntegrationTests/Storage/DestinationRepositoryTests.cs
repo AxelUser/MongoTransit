@@ -24,8 +24,7 @@ namespace MongoTransit.IntegrationTests.Storage
         
         public DestinationRepositoryTests()
         {
-            var (_, collection) = CreateConnection(nameof(DestinationRepositoryTests));
-            _destCollection = collection;
+            _destCollection = CreateConnection(nameof(DestinationRepositoryTests));;
 
             _sut = new DestinationRepository(_destCollection, new Mock<ILogger>().Object);
         }

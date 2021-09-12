@@ -16,7 +16,7 @@ using Xunit.Abstractions;
 
 namespace MongoTransit.IntegrationTests
 {
-    public class TransitRunnerTests: IntegrationTestBase
+    public class TransitRunnerTests: IntegrationTestBase, IDisposable
     {
         private readonly ITestOutputHelper _testOutputHelper;
 
@@ -287,7 +287,7 @@ namespace MongoTransit.IntegrationTests
             return (source, dest);
         }
 
-        private ILogger CreateLogger()
+        private static ILogger CreateLogger()
         {
             return new LoggerConfiguration()
                 .MinimumLevel.Debug()
@@ -297,21 +297,23 @@ namespace MongoTransit.IntegrationTests
                 .CreateLogger(); 
         }
 
-        private IEnumerable<int> SingeCycle()
+        private static IEnumerable<int> SingeCycle()
         {
             yield return 0;
         }
 
-        public override void Dispose()
+        public void Dispose()
         {
             foreach (var (database, collection) in _createdCollections)
             {
+                SourceClient.GetDatabase(database).DropCollection(collection);
+                if (!SourceClient.GetDatabase(database).ListCollections().Any())
+                    SourceClient.DropDatabase(database);
+                
                 DestinationClient.GetDatabase(database).DropCollection(collection);
                 if (!DestinationClient.GetDatabase(database).ListCollections().Any())
                     DestinationClient.DropDatabase(database);
             }
-            
-            base.Dispose();
         }
 
         #endregion
