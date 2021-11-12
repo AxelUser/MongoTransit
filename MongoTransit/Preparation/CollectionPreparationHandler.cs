@@ -81,7 +81,9 @@ namespace MongoTransit.Preparation
 
             if (lastCheckpoint != null)
             {
+#pragma warning disable CS8620
                 lastCheckpoint -= offset;
+#pragma warning restore CS8620
                 _logger.Debug("Collection {Collection} will be transferred from checkpoint {LastCheckpoint}",
                     _collectionName, lastCheckpoint);
             }
