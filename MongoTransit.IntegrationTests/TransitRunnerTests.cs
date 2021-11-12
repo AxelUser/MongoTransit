@@ -209,7 +209,7 @@ namespace MongoTransit.IntegrationTests
             }
         }
         
-        [Fact(Skip = "Unstable: seems like data in source is not updated before transferred second time, so no retries")]
+        [Fact]
         public async Task RunAsync_ShouldTransferAllDataWithRetries_DestinationCollectionIsSharded_IterativeRestore_ShardedKeyChangedInSource()
         {
             // Arrange
@@ -218,7 +218,7 @@ namespace MongoTransit.IntegrationTests
                 "TestDb", "TestC", new[] { nameof(Entity.ShardedKey) }, true, 4, 100, true,
                 new IterativeTransitOptions(nameof(Entity.Modified), TimeSpan.Zero, null));
             
-            var zonesRanges = new ZoneRange[]
+            var zonesRanges = new ZoneRange[] 
             {
                 new("ZoneA", 0, 100),
                 new("ZoneB", 100, 200)
@@ -264,13 +264,13 @@ namespace MongoTransit.IntegrationTests
             await Task.Delay(TimeSpan.FromSeconds(20));
             
             // Assert
-            resultsBefore.Processed.Should().Be(originalEntities.Length);
-            resultsAfter.Retried.Should().Be(originalEntities.Length);
-            
             var sourceEntities = await sourceCollection.Find(FilterDefinition<Entity>.Empty).ToListAsync();
             var destinationEntities = await destinationCollection.Find(FilterDefinition<Entity>.Empty).ToListAsync();
             destinationEntities.Should().BeEquivalentTo(sourceEntities,
                 $"Destination collection {transitOption.Database}.{transitOption.Collection} should have all documents from source");
+            
+            resultsBefore.Processed.Should().Be(originalEntities.Length);
+            resultsAfter.Retried.Should().Be(originalEntities.Length);
         }
 
         #region additional methods
