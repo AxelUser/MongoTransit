@@ -80,7 +80,7 @@ namespace MongoTransit.IntegrationTests.Helpers
             }).ToArray();
         }
 
-        private void VerifyOk(BsonDocument operationResult, string operationName)
+        private static void VerifyOk(BsonValue operationResult, string operationName)
         {
             var ok = operationResult["ok"].AsDouble;
             if (ok != 1.0D) throw new Exception($"{operationName} failed");

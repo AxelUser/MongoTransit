@@ -25,8 +25,7 @@ namespace MongoTransit.IntegrationTests.Storage
 
         public SourceRepositoryTests()
         {
-            var (_, collection) = CreateConnection(nameof(SourceRepositoryTests));
-            _sourceCollection = collection;
+            _sourceCollection = CreateConnection(nameof(SourceRepositoryTests));;
 
             _sut = new SourceRepository(_sourceCollection, new Mock<ILogger>().Object);
         }
@@ -154,7 +153,7 @@ namespace MongoTransit.IntegrationTests.Storage
                 ["Key"] = $"source_{idx}",
                 ["Value"] = $"source_{Fixture.Create<string>()}",
             }));
-            var (_, destinationCollection) = CreateConnection();
+            var destinationCollection = CreateConnection();
             var destValues = _sourceCollection.FindSync(new BsonDocument()).ToList().Select(document =>
             {
                 document["Key"] = document["Key"].AsString.Replace("source_", "destination_");
