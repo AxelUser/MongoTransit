@@ -6,7 +6,7 @@ namespace MongoTransit.ExecutionPolicies;
 
 public static class WithRetry
 {
-    public static async Task<TResult> ExecuteAsync<TResult>(int attempts, TimeSpan cooldown, Func<Task<TResult>> wrappedFunc, Func<Exception, bool> shouldRetry, CancellationToken ct)
+    public static async Task<TResult> ExecuteAsync<TResult>(int attempts, TimeSpan cooldown, Func<Task<TResult>> wrappedFunc, Func<Exception, bool> shouldRetry, CancellationToken ct, Action<Exception>? onRetry = null)
     {
         if (attempts <= 0) throw new ArgumentException("Should be greater than zero", nameof(attempts));
 
@@ -20,6 +20,7 @@ public static class WithRetry
             catch (Exception e)
             {
                 if (attempts == 0 || !shouldRetry(e)) throw;
+                onRetry?.Invoke(e);
                 await Task.Delay(cooldown, ct);
             }
         }

@@ -74,10 +74,13 @@ namespace MongoTransit.Storage.Destination
             sw.Start();
             try
             {
-                var result = await WithRetry.ExecuteAsync(3, TimeSpan.FromSeconds(5), () => _collection.ReplaceOneAsync(model.Filter, model.Replacement, new ReplaceOptions
-                {
-                    BypassDocumentValidation = true
-                }, token), e => e is MongoWriteException mwe && mwe.WriteError.Code == MongoErrorCodes.LockTimeout, token);
+                var result = await WithRetry.ExecuteAsync(3, TimeSpan.FromSeconds(5), () =>
+                        _collection.ReplaceOneAsync(model.Filter, model.Replacement, new ReplaceOptions
+                        {
+                            BypassDocumentValidation = true
+                        }, token),
+                    e => e is MongoWriteException mwe && mwe.WriteError.Code == MongoErrorCodes.LockTimeout,
+                    token, e => _logger.Warning(e, "Failed replace with retryable exception"));
                 sw.Stop();
 
                 _logger.Debug(

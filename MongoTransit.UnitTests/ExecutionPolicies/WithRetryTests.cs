@@ -105,4 +105,21 @@ public class WithRetryTests
         // Assert
         waitBetweenAttempts.Elapsed.Should().BeGreaterOrEqualTo(cooldown);
     }
+    
+    [Fact]
+    public async Task ExecuteAsync_ShouldInvokeCallbackOnRetry_WrappedFunctionFails()
+    {
+        // Arrange
+        var onRetryMock = new Mock<Action<Exception>>();
+        var wrappedFunc = new Mock<Func<Task<int>>>();
+        wrappedFunc.SetupSequence(wf => wf())
+            .ThrowsAsync(new Exception())
+            .ReturnsAsync(42);
+
+        // Act
+        await WithRetry.ExecuteAsync(2, TimeSpan.Zero, wrappedFunc.Object, _ => true, default, onRetryMock.Object);
+        
+        // Assert
+        onRetryMock.Verify(a => a(It.IsAny<Exception>()), Times.Once);
+    }
 }
