@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using MongoTransit.ExecutionPolicies;
 using MongoTransit.Extensions;
 using MongoTransit.Storage.Destination.Exceptions;
 using Serilog;
@@ -73,10 +74,10 @@ namespace MongoTransit.Storage.Destination
             sw.Start();
             try
             {
-                var result = await _collection.ReplaceOneAsync(model.Filter, model.Replacement, new ReplaceOptions
+                var result = await WithRetry.ExecuteAsync(3, TimeSpan.FromSeconds(5), () => _collection.ReplaceOneAsync(model.Filter, model.Replacement, new ReplaceOptions
                 {
                     BypassDocumentValidation = true
-                }, token);
+                }, token), e => e is MongoWriteException mwe && mwe.WriteError.Code == MongoErrorCodes.LockTimeout, token);
                 sw.Stop();
 
                 _logger.Debug(
@@ -93,7 +94,6 @@ namespace MongoTransit.Storage.Destination
             {
                 throw new ReplaceOneException($"Failed to replace document: {e.Message}", e);
             }
-
         }
 
         public async Task DeleteAllDocumentsAsync(CancellationToken token)
