@@ -63,9 +63,19 @@ jobs:
       uses: actions/setup-dotnet@v1
       with:
         dotnet-version: ${{ env.DOTNET_VER }}
-    
+
+    - name: Bump version and push tag
+      id: bump-version
+      uses: anothrNick/github-tag-action@1.26.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        WITH_V: false
+
     - name: Publish Linux x64
-      run: dotnet publish MongoTransit/MongoTransit.csproj --configuration Release --runtime linux-x64 -p:PublishSingleFile=true --self-contained -o Releases/linux-x64
+      run: dotnet publish MongoTransit/MongoTransit.csproj --configuration Release --runtime linux-x64 -p:Version=${{ steps.bump-version.outputs.new_tag }} -p:PublishSingleFile=true --self-contained -o Releases/linux-x64
+      
+    - name: Print Linux x64 version
+      run: ./Releases/linux-x64/MongoTransit --version
     
     - name: Upload MongoTransit executable into build artifacts
       uses: actions/upload-artifact@v2
@@ -73,19 +83,11 @@ jobs:
         name: mongotransit-linux-x64
         path: Releases/linux-x64/MongoTransit
     
-    - name: Bump version and push tag
-      id: bump
-      if: github.ref == 'refs/heads/master'
-      uses: anothrNick/github-tag-action@1.26.0
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        WITH_V: true
-    
     - name: Create release
       if: github.ref == 'refs/heads/master'
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: ${{ steps.bump.outputs.new_tag }}
+        tag_name: ${{ steps.bump-version.outputs.new_tag }}
         files: Releases/linux-x64/MongoTransit
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -19,7 +19,7 @@ namespace MongoTransit
         [Option('r', "runs", Default = 0, HelpText = "How many transition cycles should tool do. Zero value will result in infinite cycle.")]
         public int Runs { get; set; }
 
-        [Option('v', "verbose", HelpText = "Log debug information into console")]
+        [Option("verbose", HelpText = "Log debug information into console")]
         public bool Verbose { get; set; }
 
         [Option("dry", HelpText = "Run tool without inserting or updating records")]
