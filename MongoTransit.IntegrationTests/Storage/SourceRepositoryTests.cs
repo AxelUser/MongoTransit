@@ -154,7 +154,7 @@ namespace MongoTransit.IntegrationTests.Storage
                 ["Key"] = $"source_{idx}",
                 ["Value"] = $"source_{Fixture.Create<string>()}",
             }));
-            var destinationCollection = CreateConnection();
+            var destinationCollection = CreateConnection("GetKeysTest");
             var destValues = _sourceCollection.FindSync(new BsonDocument()).ToList().Select(document =>
             {
                 document["Key"] = document["Key"].AsString.Replace("source_", "destination_");
