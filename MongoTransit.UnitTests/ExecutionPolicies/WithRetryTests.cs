@@ -103,7 +103,7 @@ public class WithRetryTests
         await WithRetry.ExecuteAsync(2, cooldown, wrappedFunc, _ => true, default);
         
         // Assert
-        waitBetweenAttempts.Elapsed.Should().BeGreaterOrEqualTo(cooldown);
+        waitBetweenAttempts.Elapsed.Should().BeCloseTo(cooldown);
     }
     
     [Fact]
