@@ -9,7 +9,7 @@ This is a tool for automatic replication of documents from one MongoDB to anothe
 - `-d`, `--destination`: Connection string for destination server or cluster. **Required**.
 - `-c`, `--config`: YAML file with configuration. **Required**.
 - `-r`, `--runs`: How many transition cycles should tool do. Zero value will result in infinite cycle. *Default: 0.*
-- `-v`, `--verbose`: Log debug information into console.
+- `--verbose`: Log debug information into console.
 - `--dry`: Run tool without inserting or updating records.
 - `--logs`: Directory for storing logs. By default they will be stored in current directory.
 - `-n`, `--notify`: Notification interval in seconds. *Default: 3.*
