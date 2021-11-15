@@ -107,6 +107,23 @@ public class WithRetryTests
     }
     
     [Fact]
+    public void ExecuteAsync_ShouldRetryOnlyForSpecifiedException_ShouldRetryPredicateChecksException()
+    {
+        // Arrange
+        var retryableException = new Exception("Retryable");
+        var notRetryableException = new Exception("Not Retryable");
+        var wrappedFunc = new Mock<Func<Task<int>>>();
+        wrappedFunc.SetupSequence(wf => wf())
+            .ThrowsAsync(retryableException)
+            .ThrowsAsync(notRetryableException)
+            .ReturnsAsync(42);
+        var func = () => WithRetry.ExecuteAsync(4, TimeSpan.Zero, wrappedFunc.Object, e => e == retryableException, default);
+
+        // Act & Assert
+        func.Awaiting(f => f.Invoke()).Should().Throw<Exception>().Which.Should().Be(notRetryableException);
+    }
+    
+    [Fact]
     public async Task ExecuteAsync_ShouldInvokeCallbackOnRetry_WrappedFunctionFails()
     {
         // Arrange
