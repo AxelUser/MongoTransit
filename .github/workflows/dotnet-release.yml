@@ -69,7 +69,7 @@ jobs:
       uses: anothrNick/github-tag-action@1.26.0
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        WITH_V: true        
+        WITH_V: false
 
     - name: Publish Linux x64
       run: dotnet publish MongoTransit/MongoTransit.csproj --configuration Release --runtime linux-x64 -p:Version=${{ steps.bump-version.outputs.new_tag }} -p:PublishSingleFile=true --self-contained -o Releases/linux-x64
