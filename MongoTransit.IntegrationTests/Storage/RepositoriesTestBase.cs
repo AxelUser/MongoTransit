@@ -19,11 +19,13 @@ namespace MongoTransit.IntegrationTests.Storage
             _client = new MongoClient(Integration.StandaloneConnectionString);
         }
         
-        protected IMongoCollection<BsonDocument> CreateConnection([CallerMemberName] string testName = "TestCollection")
+        protected IMongoCollection<BsonDocument> CreateConnection(string testName)
         {
-            var database = _client.GetDatabase("TestDatabase");
-            var collection = database.GetCollection<BsonDocument>(testName);
-            _createdCollections.Add(("TestDatabase", testName));
+            var databaseName = $"{testName}{Guid.NewGuid()}";
+            var database = _client.GetDatabase(databaseName);
+            var collectionName = $"{testName}{Guid.NewGuid()}";
+            var collection = database.GetCollection<BsonDocument>(collectionName);
+            _createdCollections.Add((databaseName, collectionName));
             return collection;
         }
 

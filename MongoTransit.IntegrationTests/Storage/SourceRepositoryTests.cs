@@ -8,6 +8,7 @@ using AutoFixture;
 using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using MongoTransit.IntegrationTests.Extensions;
 using MongoTransit.Storage;
 using MongoTransit.Storage.Destination;
 using MongoTransit.Storage.Source;
@@ -27,7 +28,7 @@ namespace MongoTransit.IntegrationTests.Storage
         {
             _sourceCollection = CreateConnection(nameof(SourceRepositoryTests));;
 
-            _sut = new SourceRepository(_sourceCollection, new Mock<ILogger>().Object);
+            _sut = new SourceRepository(_sourceCollection, TestLoggerFactory.Create(nameof(SourceRepositoryTests)));
         }
 
         #region ReadDocumentsAsync
@@ -57,7 +58,7 @@ namespace MongoTransit.IntegrationTests.Storage
         {
             // Arrange
             var channel = Channel.CreateUnbounded<List<ReplaceOneModel<BsonDocument>>>();
-            var currentDate = DateTime.UtcNow;
+            var currentDate = Fixture.CreateMongoDbDate();
             await _sourceCollection.InsertManyAsync(Enumerable.Range(0, 100).Select(idx => new BsonDocument
             {
                 ["Modified"] = new BsonDateTime(currentDate.AddMinutes(idx))
@@ -153,7 +154,7 @@ namespace MongoTransit.IntegrationTests.Storage
                 ["Key"] = $"source_{idx}",
                 ["Value"] = $"source_{Fixture.Create<string>()}",
             }));
-            var destinationCollection = CreateConnection();
+            var destinationCollection = CreateConnection("GetKeysTest");
             var destValues = _sourceCollection.FindSync(new BsonDocument()).ToList().Select(document =>
             {
                 document["Key"] = document["Key"].AsString.Replace("source_", "destination_");
@@ -220,7 +221,7 @@ namespace MongoTransit.IntegrationTests.Storage
         public async Task CountLagAsync_ShouldReturnZero_EmptyCollection()
         {
             // Act
-            var actual = await _sut.CountLagAsync(new SourceFilter("Modified", DateTime.UtcNow), CancellationToken.None);
+            var actual = await _sut.CountLagAsync(new SourceFilter("Modified", Fixture.CreateMongoDbDate()), CancellationToken.None);
 
             // Assert
             actual.Should().Be(0);
@@ -232,7 +233,7 @@ namespace MongoTransit.IntegrationTests.Storage
         public async Task CountLagAsync_ShouldReturnAtLeastOverlappingCount_CheckpointValueIsEqualsToLastKnownFieldValue(int elementsWithMaxCheckpointFieldValue)
         {
             // Arrange
-            var lastCheckpoint = DateTime.UtcNow;
+            var lastCheckpoint = Fixture.CreateMongoDbDate();
             await _sourceCollection.InsertOneAsync(new BsonDocument
             {
                 ["Modified"] = new BsonDateTime(lastCheckpoint.AddMinutes(-1))
@@ -257,7 +258,7 @@ namespace MongoTransit.IntegrationTests.Storage
         public async Task CountLagAsync_ShouldReturnNumberOfDocumentsGteThanCheckpoint_CheckpointValueIsLessThanMaximumAvailable(int documentsAfterCheckpoint)
         {
             // Arrange
-            var lastCheckpoint = DateTime.UtcNow;
+            var lastCheckpoint = Fixture.CreateMongoDbDate();
             await _sourceCollection.InsertManyAsync(new []
             {
                 new BsonDocument

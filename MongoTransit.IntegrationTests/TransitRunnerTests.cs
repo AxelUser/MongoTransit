@@ -9,8 +9,6 @@ using MongoDB.Driver;
 using MongoTransit.IntegrationTests.Helpers;
 using MongoTransit.Options;
 using MongoTransit.Transit;
-using Serilog;
-using Serilog.Events;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -129,7 +127,7 @@ namespace MongoTransit.IntegrationTests
                 null)).ToArray(); 
             
             // Act
-            var results = await TransitRunner.RunAsync(CreateLogger(), transitOptions, SingeCycle(), false,
+            var results = await TransitRunner.RunAsync(TestLoggerFactory.Create("FullRestoreTest"), transitOptions, SingeCycle(), false,
                 TimeSpan.FromSeconds(3), CancellationToken.None);
             
             // Assert
@@ -174,7 +172,7 @@ namespace MongoTransit.IntegrationTests
                 o.IterativeOptions)).ToArray(); 
             
             // Act
-            await TransitRunner.RunAsync(CreateLogger(), transitOptions, SingeCycle(), false,
+            await TransitRunner.RunAsync(TestLoggerFactory.Create("IterativeRestoreTest"), transitOptions, SingeCycle(), false,
                 TimeSpan.FromSeconds(3), CancellationToken.None);
             
             const int secondLoadCount = 500;
@@ -191,7 +189,7 @@ namespace MongoTransit.IntegrationTests
                     .InsertManyAsync(entities);
             }
             
-            var secondRunResults = await TransitRunner.RunAsync(CreateLogger(), transitOptions, SingeCycle(), false,
+            var secondRunResults = await TransitRunner.RunAsync(TestLoggerFactory.Create("IterativeRestoreTest"), transitOptions, SingeCycle(), false,
                 TimeSpan.FromSeconds(3), CancellationToken.None);
             
             // Assert
@@ -245,7 +243,7 @@ namespace MongoTransit.IntegrationTests
             
             await sourceCollection.InsertManyAsync(originalEntities);
 
-            var resultsBefore = await TransitRunner.RunAsync(CreateLogger(), new [] {transitOption}, SingeCycle(), false,
+            var resultsBefore = await TransitRunner.RunAsync(TestLoggerFactory.Create("RetryTest"), new [] {transitOption}, SingeCycle(), false,
                 TimeSpan.FromSeconds(3), CancellationToken.None);
             
             // Wait until all data is acknowledged
@@ -257,7 +255,7 @@ namespace MongoTransit.IntegrationTests
                     .Set(e => e.Modified, originalModified.AddHours(1)));
 
             // Act
-            var resultsAfter = await TransitRunner.RunAsync(CreateLogger(), new [] {transitOption}, SingeCycle(), false,
+            var resultsAfter = await TransitRunner.RunAsync(TestLoggerFactory.Create("RetryTest"), new [] {transitOption}, SingeCycle(), false,
                 TimeSpan.FromSeconds(3), CancellationToken.None);
             
             // Wait until all data is acknowledged
@@ -285,16 +283,6 @@ namespace MongoTransit.IntegrationTests
             var dest = DestinationClient.GetDatabase(database).GetCollection<Entity>(collection);
 
             return (source, dest);
-        }
-
-        private static ILogger CreateLogger()
-        {
-            return new LoggerConfiguration()
-                .MinimumLevel.Debug()
-                .Enrich.WithProperty("Scope", "Runner")
-                .WriteTo.Console(LogEventLevel.Debug,
-                    "[{Timestamp:HH:mm:ss} {Level:u3}][{Scope}] {Message:lj}{NewLine}{Exception}")
-                .CreateLogger(); 
         }
 
         private static IEnumerable<int> SingeCycle()
