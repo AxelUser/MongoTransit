@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -10,8 +9,6 @@ using MongoDB.Driver;
 using MongoTransit.Extensions;
 using MongoTransit.IntegrationTests.Extensions;
 using MongoTransit.Storage.Destination;
-using Moq;
-using Serilog;
 using Xunit;
 
 namespace MongoTransit.IntegrationTests.Storage
@@ -26,7 +23,7 @@ namespace MongoTransit.IntegrationTests.Storage
         {
             _destCollection = CreateConnection(nameof(DestinationRepositoryTests));;
 
-            _sut = new DestinationRepository(_destCollection, new Mock<ILogger>().Object);
+            _sut = new DestinationRepository(_destCollection, TestLoggerFactory.Create(nameof(DestinationRepositoryTests)));
         }
 
         #region FindLastCheckpointAsync

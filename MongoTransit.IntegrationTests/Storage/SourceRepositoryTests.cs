@@ -28,7 +28,7 @@ namespace MongoTransit.IntegrationTests.Storage
         {
             _sourceCollection = CreateConnection(nameof(SourceRepositoryTests));;
 
-            _sut = new SourceRepository(_sourceCollection, new Mock<ILogger>().Object);
+            _sut = new SourceRepository(_sourceCollection, TestLoggerFactory.Create(nameof(SourceRepositoryTests)));
         }
 
         #region ReadDocumentsAsync
