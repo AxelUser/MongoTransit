@@ -73,6 +73,9 @@ jobs:
 
     - name: Publish Linux x64
       run: dotnet publish MongoTransit/MongoTransit.csproj --configuration Release --runtime linux-x64 -p:Version=${{ steps.bump-version.outputs.new_tag }} -p:PublishSingleFile=true --self-contained -o Releases/linux-x64
+      
+    - name: Print Linux x64 version
+      run: ./Releases/linux-x64/MongoTransit --version
     
     - name: Upload MongoTransit executable into build artifacts
       uses: actions/upload-artifact@v2
