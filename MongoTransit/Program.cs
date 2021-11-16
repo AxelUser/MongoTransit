@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommandLine;
+using MongoTransit.Configuration;
 using MongoTransit.Options;
 using MongoTransit.Transit;
 using Serilog;

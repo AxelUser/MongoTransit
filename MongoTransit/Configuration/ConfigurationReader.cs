@@ -4,10 +4,11 @@ using System.IO;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
-namespace MongoTransit
+namespace MongoTransit.Configuration
 {
-    public class ConfigurationReader
+    public static class ConfigurationReader
     {
+        // ReSharper disable once ClassNeverInstantiated.Global
         public class CollectionOption
         {
             public string Name { get; set; }
@@ -23,6 +24,7 @@ namespace MongoTransit
             public IterativeCollectionOptions? IterativeOptions { get; set; }
         }
 
+        // ReSharper disable once ClassNeverInstantiated.Global
         public class IterativeCollectionOptions
         {
             public string Field { get; set; }
