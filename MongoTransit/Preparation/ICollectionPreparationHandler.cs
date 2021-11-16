@@ -1,7 +1,7 @@
 ﻿using System.Threading;
 using System.Threading.Tasks;
+using MongoTransit.Configuration.Options;
 using MongoTransit.Notifications.Notifiers;
-using MongoTransit.Options;
 
 namespace MongoTransit.Preparation
 {
