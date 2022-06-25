@@ -26,7 +26,7 @@ namespace MongoTransit.IntegrationTests.Storage
 
         public SourceRepositoryTests()
         {
-            _sourceCollection = CreateConnection(nameof(SourceRepositoryTests));;
+            _sourceCollection = CreateConnection(nameof(SourceRepositoryTests));
 
             _sut = new SourceRepository(_sourceCollection, TestLoggerFactory.Create(nameof(SourceRepositoryTests)));
         }
