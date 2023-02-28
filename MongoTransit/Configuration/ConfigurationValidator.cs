@@ -5,9 +5,9 @@ namespace MongoTransit.Configuration;
 
 public static class ConfigurationValidator
 {
-    public static IEnumerable<string> Validate(ConfigurationReader.CollectionOption[] collectionOptions)
+    public static IEnumerable<string> Validate(IReadOnlyList<ConfigurationReader.CollectionOption> collectionOptions)
     {
-        for (var i = 0; i < collectionOptions.Length; i++)
+        for (var i = 0; i < collectionOptions.Count; i++)
         {
             var option = collectionOptions[i];
             if (string.IsNullOrWhiteSpace(option.Database))

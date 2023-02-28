@@ -34,7 +34,7 @@ namespace MongoTransit.Configuration
             public int OffsetInMinutes { get; set; }
         }
 
-        public static IEnumerable<CollectionOption> Read(string file)
+        public static IReadOnlyList<CollectionOption> Read(string file)
         {
             var deserializer = new DeserializerBuilder()
                 .WithNamingConvention(CamelCaseNamingConvention.Instance)
@@ -42,7 +42,6 @@ namespace MongoTransit.Configuration
 
             using var reader = File.OpenText(file);
             return deserializer.Deserialize<CollectionOption[]>(reader);
-
         }
     }
 }

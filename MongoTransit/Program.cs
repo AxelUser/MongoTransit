@@ -45,7 +45,13 @@ namespace MongoTransit
 
         private static IEnumerable<CollectionTransitOptions> CreateConfigurations(ToolOptions toolOptions)
         {
-            var config = ConfigurationReader.Read(toolOptions.ConfigFile).ToArray();
+            var config = ConfigurationReader.Read(toolOptions.ConfigFile);
+
+            var errors = ConfigurationValidator.Validate(config);
+            if (errors.Any())
+            {
+                // TODO: write error
+            }
             
             foreach (var coll in config)
             {
