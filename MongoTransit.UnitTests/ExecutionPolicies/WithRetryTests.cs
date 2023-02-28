@@ -49,7 +49,7 @@ public class WithRetryTests
     [Theory]
     [InlineData(1)]
     [InlineData(10)]
-    public void ExecuteAsync_ShouldThrowExceptionFromFunction_WrappedFunctionThrowsException(int attempts)
+    public async Task ExecuteAsync_ShouldThrowExceptionFromFunction_WrappedFunctionThrowsException(int attempts)
     {
         // Arrange
         var exception = new Exception($"Attempt failed");
@@ -57,7 +57,7 @@ public class WithRetryTests
             _ => true, default);
 
         // Act & Assert
-        func.Awaiting(f => f.Invoke()).Should().Throw<Exception>().Which.Should().Be(exception);
+        (await func.Awaiting(f => f.Invoke()).Should().ThrowAsync<Exception>()).Which.Should().Be(exception);
     }
     
     [Theory]
@@ -87,7 +87,8 @@ public class WithRetryTests
         // Arrange
         var cooldown = TimeSpan.FromSeconds(2);
         var waitBetweenAttempts = new Stopwatch();
-        var wrappedFunc = () =>
+
+        Task<int> WrappedFunc()
         {
             if (waitBetweenAttempts.IsRunning)
             {
@@ -97,17 +98,17 @@ public class WithRetryTests
 
             waitBetweenAttempts.Start();
             return Task.FromException<int>(new Exception("Attempt failed"));
-        };
+        }
 
         // Act
-        await WithRetry.ExecuteAsync(2, cooldown, wrappedFunc, _ => true, default);
+        await WithRetry.ExecuteAsync(2, cooldown, (Func<Task<int>>)WrappedFunc, _ => true, default);
         
         // Assert
-        waitBetweenAttempts.Elapsed.Should().BeCloseTo(cooldown);
+        waitBetweenAttempts.Elapsed.Should().BeCloseTo(cooldown, TimeSpan.FromMilliseconds(100));
     }
     
     [Fact]
-    public void ExecuteAsync_ShouldRetryOnlyForSpecifiedException_ShouldRetryPredicateChecksException()
+    public async Task ExecuteAsync_ShouldRetryOnlyForSpecifiedException_ShouldRetryPredicateChecksException()
     {
         // Arrange
         var retryableException = new Exception("Retryable");
@@ -120,7 +121,7 @@ public class WithRetryTests
         var func = () => WithRetry.ExecuteAsync(4, TimeSpan.Zero, wrappedFunc.Object, e => e == retryableException, default);
 
         // Act & Assert
-        func.Awaiting(f => f.Invoke()).Should().Throw<Exception>().Which.Should().Be(notRetryableException);
+        (await func.Awaiting(f => f.Invoke()).Should().ThrowAsync<Exception>()).Which.Should().Be(notRetryableException);
     }
     
     [Fact]
