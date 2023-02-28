@@ -1,5 +1,5 @@
 # Mongo-Transit
-This is a tool for automatic replication of documents from one MongoDB to another.
+This is a tool for automatic replication of documents from one MongoDB cluster to another.
 
 # Configurations
 
@@ -39,9 +39,9 @@ Description:
 - `name`: collection name.
 - `database`: database name.
 - `iterativeOptions`: options for iterative transfer, i.e. when tool transfer data only from last known point-in-time.
-    - `field`: name of the field, which contains checkpoint (version) value. Must be a valid UTC date.
+    - `field`: name of the field, which contains checkpoint (version) value. *_Currently only UTC date values are supported._*
     - `forcedCheckpoint`: option for making a transfer from specified point in time.
     - `offsetInMinutes`: time offset that is subtracted from last checkpoint value.
-- `keyFields`: an array of keys, that should be included in update filter. It is useful when you restore collection with some unique index or a sharded collection.
-- `fetchKeyFromDestination`: when performing an upsert, load values for update filter not from source, but from destination. This is useful when you are changing you shard key value - if not specified, it will cause duplicate key exception, cause it won't find document with new keys and perform insertion.
+- `keyFields`: an array of keys, that should be included in update filter. Useful when you restore collection with some unique index or a sharded collection.
+- `fetchKeyFromDestination`: when performing an upsert, load values for update filter not from source, but from destination. Useful when you are changing you shard key value - if not specified, it will cause duplicate key exception, cause it won't find document with new keys and perform insertion.
 - `noUpsert`: disable upsert and perform regular update.
