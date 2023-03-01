@@ -54,9 +54,10 @@ namespace MongoTransit
                         coll.IterativeOptions.ForcedCheckpoint)
                     : null;
 
+                var shardedKeyOpts = coll.ShardedKey == null ? null : new ShardedKeyOptions(coll.ShardedKey.Fields, coll.ShardedKey.FromDestination);
+
                 yield return new CollectionTransitOptions(toolOptions.SourceConnectionString,
-                    toolOptions.DestinationConnectionString, coll.Database, coll.Name, coll.KeyFields,
-                    coll.FetchKeyFromDestination, toolOptions.WorkersPerCpu, toolOptions.BatchSize, !coll.NoUpsert, iterOpts);
+                    toolOptions.DestinationConnectionString, coll.Database, coll.Name, shardedKeyOpts, toolOptions.WorkersPerCpu, toolOptions.BatchSize, !coll.NoUpsert, iterOpts);
             }
         }
 

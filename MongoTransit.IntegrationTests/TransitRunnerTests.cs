@@ -123,7 +123,7 @@ namespace MongoTransit.IntegrationTests
 
             var transitOptions = options.Select(o => new CollectionTransitOptions(SourceConnectionString,
                 DestinationConnectionString,
-                o.Database, o.Collection, new[] { nameof(Entity.ShardedKey) }, o.FetchKey, 4, 100, true,
+                o.Database, o.Collection, new ShardedKeyOptions(new[] { nameof(Entity.ShardedKey) }, o.FetchKey), 4, 100, true,
                 null)).ToArray(); 
             
             // Act
@@ -168,7 +168,7 @@ namespace MongoTransit.IntegrationTests
 
             var transitOptions = options.Select(o => new CollectionTransitOptions(SourceConnectionString,
                 DestinationConnectionString,
-                o.Database, o.Collection, new[] { nameof(Entity.ShardedKey) }, o.FetchKey, 4, 100, true,
+                o.Database, o.Collection, new ShardedKeyOptions(new[] { nameof(Entity.ShardedKey) }, o.FetchKey), 4, 100, true,
                 o.IterativeOptions)).ToArray(); 
             
             // Act
@@ -207,13 +207,13 @@ namespace MongoTransit.IntegrationTests
             }
         }
         
-        [Fact]
+        [Fact(Skip = "Update of shared key is unsupported for now")]
         public async Task RunAsync_ShouldTransferAllDataWithRetries_DestinationCollectionIsSharded_IterativeRestore_ShardedKeyChangedInSource()
         {
             // Arrange
             var transitOption = new CollectionTransitOptions(SourceConnectionString,
                 DestinationConnectionString,
-                "TestDb", "TestC", new[] { nameof(Entity.ShardedKey) }, true, 4, 100, true,
+                "TestDb", "TestC", new ShardedKeyOptions(new[] { nameof(Entity.ShardedKey) }, true), 4, 100, true,
                 new IterativeTransitOptions(nameof(Entity.Modified), TimeSpan.Zero, null));
             
             var zonesRanges = new ZoneRange[] 

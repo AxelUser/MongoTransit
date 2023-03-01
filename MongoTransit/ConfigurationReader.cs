@@ -10,22 +10,35 @@ namespace MongoTransit
     {
         public class CollectionOption
         {
+#pragma warning disable CS8618
             public string Name { get; set; }
+#pragma warning restore CS8618
 
+#pragma warning disable CS8618
             public string Database { get; set; }
+#pragma warning restore CS8618
 
-            public string[]? KeyFields { get; set; }
-
-            public bool FetchKeyFromDestination { get; set; }
+            public ShardedKey? ShardedKey { get; set; }
 
             public bool NoUpsert { get; set; }
 
             public IterativeCollectionOptions? IterativeOptions { get; set; }
         }
+        
+        public class ShardedKey
+        {
+#pragma warning disable CS8618
+            public string[] Fields { get; set; }
+#pragma warning restore CS8618
+
+            public bool FromDestination { get; set; }
+        }
 
         public class IterativeCollectionOptions
         {
+#pragma warning disable CS8618
             public string Field { get; set; }
+#pragma warning restore CS8618
 
             public DateTime? ForcedCheckpoint { get; set; }
             
