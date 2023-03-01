@@ -28,7 +28,7 @@ Example:
     field: LastModified
     forcedCheckpoint: 2021-03-15T16:00:00.894Z
     offsetInMinutes: 60
-  shardedKey:
+  shardKey:
     fields:
     - UserId
     - _id
@@ -43,7 +43,7 @@ Description:
     - `field`: name of the field, which contains checkpoint (version) value. *_Currently only UTC date values are supported._*
     - `forcedCheckpoint`: option for making a transfer from specified point in time.
     - `offsetInMinutes`: time offset that is subtracted from last checkpoint value.
-- `shardedKey`: options dedicated to work with sharded cluster.
+- `shardKey`: options dedicated to work with sharded cluster.
   - `fields`: an array of keys, that should be included in update filter. Useful when you restore collection with some unique index or a sharded collection.
   - `fromDestination`: when performing an upsert, load values for update filter not from source, but from destination. Useful when you are changing you shard key value - if not specified, it will cause duplicate key exception, cause it won't find document with new keys and perform insertion. **WARNING: currently this behavior is not supported.**
 - `noUpsert`: disable upsert and perform regular update.

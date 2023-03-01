@@ -18,14 +18,14 @@ namespace MongoTransit
             public string Database { get; set; }
 #pragma warning restore CS8618
 
-            public ShardedKey? ShardedKey { get; set; }
+            public ShardKeyOptions? ShardKey { get; set; }
 
             public bool NoUpsert { get; set; }
 
             public IterativeCollectionOptions? IterativeOptions { get; set; }
         }
         
-        public class ShardedKey
+        public class ShardKeyOptions
         {
 #pragma warning disable CS8618
             public string[] Fields { get; set; }
