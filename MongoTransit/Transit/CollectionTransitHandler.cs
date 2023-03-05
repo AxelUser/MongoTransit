@@ -106,8 +106,8 @@ namespace MongoTransit.Transit
             var writeHandler = writer.WriteAsync(token);
 
             await _source.ReadDocumentsAsync(filter, transitChannel, _options.BatchSize,
-                _options.KeyFields ?? Array.Empty<string>(), _options.Upsert,
-                _options.FetchKeyFromDestination ? _destination : null, token);
+                _options.ShardKeyOptions?.Fields ?? Array.Empty<string>(), _options.Upsert,
+                _options.ShardKeyOptions?.FromDestination == true ? _destination : null, token);
 
             var results = await writeHandler;
             sw.Stop();
